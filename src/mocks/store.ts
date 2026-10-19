@@ -5,6 +5,10 @@ import type { AbsenceRequest, ApprovedLeave, Role, TodayAttendance, WorkSettings
  * Store mock in-memory.
  * shortcut: state hilang saat server restart dan tidak dibagi antar instance.
  * Cukup untuk demo; ganti ke BE asli sebelum butuh data permanen.
+ *
+ * Seed di bawah = fixture sementara untuk membuktikan AC (bulan berisi/kosong, cuti vs alpa,
+ * hari ini kosong), bukan sumber kebenaran. Setelah ERD/API contract SA keluar, sesuaikan
+ * nama field & nilai di file ini saja — jangan dikosongkan, jangan ditambah.
  */
 
 export type Employee = {
