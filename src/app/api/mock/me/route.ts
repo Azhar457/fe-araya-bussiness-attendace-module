@@ -1,0 +1,10 @@
+import { NextResponse } from "next/server";
+
+import { getSession } from "@/lib/auth/session";
+
+export const dynamic = "force-dynamic";
+
+/** GET /api/mock/me */
+export async function GET() {
+  return NextResponse.json(await getSession());
+}
