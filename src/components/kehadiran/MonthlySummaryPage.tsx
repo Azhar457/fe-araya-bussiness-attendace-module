@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useSearch, useSearchTarget } from "@/components/layout/search-context";
 import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
-import { FormField, Input } from "@/components/ui/FormField";
+import { FormField, Select } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table, type Column } from "@/components/ui/Table";
@@ -19,13 +20,27 @@ function num(value: number) {
   return <span className="tabular-nums">{value}</span>;
 }
 
+/** 12 bulan terakhir dengan label bahasa Indonesia ("Oktober 2026").
+    Dipakai menggantikan <input type="month"> yang teksnya mengikuti bahasa browser,
+    bukan format wajib Panduan UI ("Okt 2026"). */
+function monthOptions(): { value: string; label: string }[] {
+  const [year, month] = currentMonth().split("-").map(Number);
+  return Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(year, month - 1 - index, 1);
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    return { value, label: formatMonthLabel(value) };
+  });
+}
+
 export function MonthlySummaryPage() {
+  const { query } = useSearch();
+  useSearchTarget("Cari nama atau divisi");
+
   const [month, setMonth] = useState(currentMonth());
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
   const [leave, setLeave] = useState<ApprovedLeave[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -50,6 +65,11 @@ export function MonthlySummaryPage() {
   useEffect(() => {
     void load(month);
   }, [load, month]);
+
+  // Pencarian dari navbar selalu mulai dari halaman 1.
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
 
   const filtered = useMemo(() => {
     const rows = summary?.rows ?? [];
@@ -90,25 +110,19 @@ export function MonthlySummaryPage() {
 
       <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
         <FormField id="bulan" label="Bulan">
-          <Input
-            type="month"
+          <Select
             value={month}
             onChange={(event) => {
               setMonth(event.target.value || currentMonth());
               setPage(1);
             }}
-          />
-        </FormField>
-        <FormField id="cari-karyawan" label="Cari karyawan">
-          <Input
-            type="search"
-            placeholder="Cari nama atau divisi"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(1);
-            }}
-          />
+          >
+            {monthOptions().map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
         </FormField>
       </Card>
 

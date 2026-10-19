@@ -10,7 +10,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   karyawan: [
     { href: "/kehadiran/hari-ini", label: "Kehadiran hari ini" },
-    { href: "/kehadiran/izin", label: "Izin & sakit" },
+    { href: "/kehadiran/izin", label: "Ajukan izin & sakit" },
+    { href: "/kehadiran/izin/riwayat", label: "Riwayat pengajuan" },
   ],
 };
 

@@ -17,8 +17,10 @@ Berisi UI + mock API lengkap untuk **M13-US1 s.d. M13-US5**, siap disambungkan k
 | M13-US1 | Pengaturan jam kerja | `/kehadiran/pengaturan` | `admin_hr` | **selesai** (mock) |
 | M13-US2 | Kehadiran hari ini | `/kehadiran/hari-ini` | `karyawan` | **selesai** (mock) |
 | M13-US3 | Ajukan izin/sakit | `/kehadiran/izin` | `karyawan` | **selesai** (mock) |
+| M13-US3 | Riwayat pengajuan | `/kehadiran/izin/riwayat` | `karyawan` | **selesai** (mock) |
 | M13-US5 | Rekap kehadiran bulanan | `/kehadiran/rekap` | `admin_hr` | **selesai** (mock) |
 | M13-US4 | Status `cuti` (kontrak M12) | muncul di rekap | sistem | **selesai di mock**, menunggu kontrak cuti final M12 |
+| — | Masuk (pilih akun) | `/masuk` | semua | **selesai** — simulasi FE, hanya ada di mode mock ([§7](#7-mock-cara-kerja--batasnya)) |
 
 Build: `npm run build` **hijau** (Next 15.5, React 19, TypeScript strict).
 Uji kontrak mock: 16/16 skenario AC lulus (lihat [§8.2](#82-cek-otomatis-yang-sudah-dijalankan)).
@@ -42,12 +44,10 @@ Node 20+. Bisa juga `pnpm`/`yarn`, tapi contoh di dokumen ini memakai `npm`.
 # false = pakai BE asli (isi NEXT_PUBLIC_API_BASE_URL)
 NEXT_PUBLIC_USE_MOCK=true
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-# peran awal simulasi session (mock only): admin_hr | karyawan
-NEXT_PUBLIC_DEFAULT_ROLE=admin_hr
 ```
 
 - `NEXT_PUBLIC_USE_MOCK=false` → `src/lib/api/client.ts` langsung menembak `NEXT_PUBLIC_API_BASE_URL`. **Tidak ada komponen yang perlu diubah.**
-- Simulasi session memakai cookie `araya_role` ([§7](#7-mock-cara-kerja--batasnya)). Ada penukar peran `Admin HR / Karyawan` di navbar — hanya untuk demo.
+- Sesi disimpan di cookie `araya_employee` ([§7](#7-mock-cara-kerja--batasnya)). Belum ada cookie → otomatis dialihkan ke `/masuk`. Untuk ganti peran saat demo: **Keluar** dari menu akun di navbar, lalu masuk dengan akun lain.
 - Reset data mock: `curl -X POST http://localhost:3000/api/mock/reset`.
 
 ---
@@ -59,11 +59,13 @@ src/
   app/
     layout.tsx                    # html/body, font, import token
     page.tsx                      # / → arahkan sesuai role
+    masuk/page.tsx                # halaman masuk (di luar kerangka navbar)
     (app)/layout.tsx              # AppShell + session
     (app)/kehadiran/
       pengaturan/page.tsx         # US1
       hari-ini/page.tsx           # US2
-      izin/page.tsx               # US3
+      izin/page.tsx               # US3 — form pengajuan
+      izin/riwayat/page.tsx       # US3 — riwayat pengajuan
       rekap/page.tsx              # US5 (+US4)
     api/mock/**                   # mock BE (route handler) — lihat §7
     globals.css
@@ -71,10 +73,12 @@ src/
     ui/            # Button, Badge, FormField/Input/Select/Textarea/RadioGroup,
                    # Table, Pagination, Toast, Dialog, Banner, Skeleton, Card,
                    # PageHeader, Icons
-    layout/        # AppShell, Navbar, Sidebar, nav-items
-    kehadiran/     # WorkSettingsForm, TodayCard, AbsencePage, MonthlySummaryPage
+    layout/        # AppShell, Navbar, AccountMenu, Sidebar, nav-items, search-context
+    auth/          # LoginPage
+    kehadiran/     # WorkSettingsForm, TodayCard, AbsenceFormPage,
+                   # AbsenceHistoryPage, MonthlySummaryPage
   lib/
-    api/           # client.ts (mock-aware) + kehadiran.ts (satu fungsi = satu endpoint)
+    api/           # client.ts (mock-aware) + kehadiran.ts + auth.ts (satu fungsi = satu endpoint)
     auth/          # constants.ts (pure) + session.ts (server: cookie & guard)
     format/        # formatDate, formatDateTime, formatTime, formatNumber, …
     types/         # tipe domain = bentuk kontrak
@@ -93,8 +97,14 @@ src/
 - Angka tabel: `tabular-nums` + rata kanan (`<Table>` mengurus ini).
 - Badge = titik + kata, tidak bisa diklik, satu badge per baris.
 - **Satu tombol utama per layar**, "Batal" di kiri aksi utama.
+- Tombol form berada **di dalam kartu form**, dipisah garis `border-line` (Panduan UI 3 · Form).
+- Kerangka: navbar 56px (logo + nama aplikasi kiri, **pencarian tengah**, akun kanan), sidebar 240px, konten maksimal 1280px rata tengah, padding 24px (16px di bawah 640px).
+- Kolom cari navbar **berfungsi**: menyaring daftar di halaman yang sedang dibuka (Rekap, Riwayat pengajuan). Halaman tanpa daftar tidak menampilkan kolom itu supaya tidak ada kontrol mati.
+- Satu-satunya layar tanpa navbar: `/masuk` (Panduan UI 4 · Struktur halaman).
+- **Mode gelap tidak dipakai.** Nilai gelap Lampiran PDF v1.0 tetap ada apa adanya di `tokens.css` sebagai `:root[data-theme="dark"]`; aktifkan dengan memasang `data-theme="dark"` pada `<html>`. Bawaannya terang karena PRD M13 tidak meminta mode gelap.
 - Loading = skeleton; error = banner merah + "Coba lagi"; empty = satu kalimat + satu aksi.
 - Toast: sukses/info hilang sendiri 5 detik, galat tetap sampai ditutup.
+- Footer tabel: jumlah data di kiri, nomor halaman + ukuran halaman (10/25/50) di kanan; kontrol halaman disembunyikan bila hasilnya hanya satu halaman.
 - Responsif: ≥1024px sidebar tetap, <1024px sidebar jadi laci, <640px satu kolom. Tabel bergulir **di dalam kartu** (satu-satunya area `overflow-x`), halaman tidak bergulir ke samping di 400px.
 
 ---
@@ -465,6 +475,9 @@ Tidak ada komponen halaman yang perlu disentuh saat kontrak berubah.
 | Warna badge `cuti` (`info` → `neutral`) | **satu baris**: `ATTENDANCE.cuti.tone` di `src/components/ui/Badge.tsx` (`design.md` TBD) |
 | Endpoint cuti M12 final | `getApprovedLeave()` di `src/lib/api/kehadiran.ts` + perhitungan `cuti` di `src/app/api/mock/attendance/monthly-summary/route.ts` |
 | Autentikasi (token/header/cookie) | `src/lib/api/client.ts` (tambah header atau `credentials`) |
+| Halaman masuk & daftar akun | `src/components/auth/LoginPage.tsx` + `src/lib/api/auth.ts` |
+| Perilaku kolom cari navbar | `src/components/layout/search-context.tsx` (+ `useSearchTarget` di halaman berdaftar) |
+| Mode gelap (opt-in) | `src/styles/tokens.css` — blok `:root[data-theme="dark"]` |
 | Kode galat baru | **tidak ada perubahan FE** — FE hanya menampilkan `message` dari BE |
 | Format tanggal/jam/angka | `src/lib/format/index.ts` |
 | Token desain | `src/styles/tokens.css` + `tailwind.config.ts` |
@@ -479,7 +492,9 @@ Semua di prefix `/api/mock`, **khusus dev**. Semua `force-dynamic` supaya tidak 
 
 | Endpoint mock | Method | Keterangan |
 |---|---|---|
-| `/api/mock/me` | GET | session dari cookie `araya_role` (fallback `NEXT_PUBLIC_DEFAULT_ROLE`) |
+| `/api/mock/accounts` | GET | daftar akun untuk halaman masuk |
+| `/api/mock/session` | POST, DELETE | masuk (set cookie `araya_employee`) / keluar |
+| `/api/mock/me` | GET | session dari cookie `araya_employee` |
 | `/api/mock/attendance/work-settings` | GET, PUT | US1 |
 | `/api/mock/attendance/today` | GET | US2 |
 | `/api/mock/attendance/check-in` | POST | US2, 409 bila ganda |
@@ -505,7 +520,8 @@ Semua di prefix `/api/mock`, **khusus dev**. Semua `force-dynamic` supaya tidak 
 **Batas mock yang harus diketahui:**
 
 - Store **in-memory** → hilang saat server restart, tidak dibagi antar instance/serverless. Cukup untuk demo.
-- Karyawan yang login selalu `emp-2` (satu orang per role). `emp-3` hanya muncul di rekap.
+- Masuk tanpa kata sandi: halaman `/masuk` hanya memilih salah satu dari 3 akun di seed. BE asli harus menyediakan autentikasi sendiri ([§10](#10-cara-ganti-mock--be-asli)).
+- Route mock memakai `EMPLOYEES[0]` bila dipanggil tanpa cookie (mis. saat uji `curl`); halaman tetap dijaga `requireSession()`.
 - Persetujuan izin/sakit tidak diotomasi (selalu `pending`).
 - Waktu memakai jam server (WIB), bukan jam browser.
 
@@ -520,7 +536,7 @@ Semua di prefix `/api/mock`, **khusus dev**. Semua `force-dynamic` supaya tidak 
 
 ### 8.1 Uji manual per Acceptance Criteria
 
-Jalankan `npm run dev`. Ganti peran lewat penukar peran di navbar.
+Jalankan `npm run dev`, lalu buka `http://localhost:3000` → dialihkan ke `/masuk`. Pilih akun untuk ganti peran (`Rani` = Admin HR, `Budi`/`Sinta` = Karyawan); **Keluar** dari menu akun di kanan navbar untuk ganti akun.
 
 | AC | Langkah | Harapan |
 |---|---|---|
@@ -531,21 +547,26 @@ Jalankan `npm run dev`. Ganti peran lewat penukar peran di navbar.
 | US2-1 | Karyawan → Hari ini → Check-in setelah batas toleransi | badge kuning **Terlambat** + "Anda terlambat N menit." |
 | US2-2 | Check-in dua kali (panggil API, atau dua tab) | `409 ALREADY_CHECKED_IN` "Anda sudah check-in hari ini."; tombol berubah jadi Check-out sehingga tidak bisa dobel dari UI |
 | US2 (lanjutan) | Check-out | jam "Pulang" terisi, tombol hilang, muncul "Kehadiran hari ini sudah lengkap." |
-| US3-1 | Karyawan → Izin & sakit → Jenis Izin, 2 tanggal, alasan → Kirim | toast "Pengajuan terkirim", muncul di riwayat dengan badge **Menunggu** |
+| US3-1 | Karyawan → Izin & sakit → Jenis Izin, 2 tanggal, alasan → Kirim | toast "Pengajuan terkirim"; baris baru muncul di `/kehadiran/izin/riwayat` dengan badge **Menunggu** |
 | US3-2 | Alasan dikosongkan → Kirim | "Alasan wajib diisi." + tidak terkirim |
 | US3 (validasi) | Tanggal selesai < tanggal mulai | "Tanggal selesai tidak boleh sebelum tanggal mulai." |
+| US3 (riwayat) | Riwayat → ketik di kolom cari navbar | tabel menyaring berdasarkan alasan; "Filter status" menyaring Menunggu/Disetujui/Ditolak |
+| US3 (batal) | Riwayat → Batalkan pada baris **Menunggu** | dialog konfirmasi → baris hilang + toast; baris **Disetujui** tidak punya tombol batalkan |
 | US5-1 | Admin → Rekap → pilih bulan berjalan | tabel hadir/terlambat/izin/sakit/cuti/alpa/total per karyawan |
 | US5-2 | Pilih bulan tanpa data (mis. 2026-08) | semua angka **0** + banner "Belum ada data kehadiran pada bulan ini." (bukan galat) |
 | US4-1 | Rekap bulan berjalan | `emp-2` `cuti: 2`, `alpa: 0` — dari 2 hari cuti disetujui M12 |
 | US4-2 | Rekap bulan berjalan | `emp-3` `cuti: 0` walau ada izin **pending** → tetap masuk `alpa` |
 | Guard | Admin buka `/kehadiran/hari-ini` | dialihkan ke `/kehadiran/pengaturan` (dan sebaliknya) |
+| Guard | Buka halaman mana pun di jendela penyamaran (tanpa cookie) | dialihkan ke `/masuk` |
+| Pencarian navbar | Rekap → ketik di kolom cari navbar | tabel menyaring nama/divisi; kolom cari **tidak muncul** di halaman tanpa daftar (mis. Pengaturan) |
 | Responsif | Perkecil ke 400px | tidak ada scroll horizontal halaman; tabel bergulir di dalam kartunya |
 
 ### 8.2 Cek otomatis yang sudah dijalankan
 
-- `npm run build` → **hijau** (4 halaman + 11 route mock, type check lolos).
+- `npm run build` → **hijau** (7 route halaman + 12 route mock, type check lolos).
 - 16/16 skenario AC terhadap route handler mock: US1 simpan/ditolak, US2 check-in terlambat + 409 ganda + check-out, US3 kirim + 400 alasan kosong + batalkan (409 untuk `approved`, 404 untuk milik orang lain), US5 rekap berisi + bulan kosong (`hasData:false`, semua 0), US4 cuti disetujui dihitung + cuti `pending` jadi alpa, guard role 307, halaman 200.
 - Audit kepatuhan panduan: 0 hex di `src/`, 0 ukuran font manual, 0 spacing di luar skala, 0 `<button>` mentah di luar `src/components/ui`.
+- Cek visual (Playwright, 1280/1024/400px): warna token cocok byte-per-byte dengan Lampiran PDF, tidak ada scroll horizontal di 400px, tampilan tetap terang walau OS gelap.
 
 **Belum ada test otomatis (unit/e2e).** Cek di atas dijalankan manual lewat `curl`. Perlu ditambah bila modul dilanjutkan.
 
@@ -558,14 +579,17 @@ Jalankan `npm run dev`. Ganti peran lewat penukar peran di navbar.
 | Kirim payload rekap ke M14 (penggajian) — endpoint #12 | **belum**, menunggu kontrak (PRD #6) |
 | Kontrak cuti M12 final — endpoint #11 | **mock**, menunggu BE (PRD #5) |
 | `DELETE` pengajuan (endpoint #9) + kolom Aksi | interpretasi FE, menunggu konfirmasi SA |
-| Autentikasi nyata (token/header/cookie) | belum; mock pakai cookie role |
+| Autentikasi nyata (token/header/cookie) | belum; mock memakai halaman masuk pilih akun + cookie `araya_employee` (tanpa kata sandi) |
 | Ekspor rekap (CSV/XLSX) | **tidak dikerjakan** — P1 (PRD #8) |
 | **Riwayat kehadiran karyawan + status `cuti` & legenda** (Sprint Plan `US4-06`, PIC FE, 1 Nov) | **belum ada halamannya.** Kolom `cuti` di rekap tidak menutup ini. Butuh daftar riwayat + legenda status → endpoint baru (ambil 7 hari terakhir sebagai basis, P1 di PRD, belum ada endpoint) |
 | Riwayat 7 hari terakhir di halaman Hari ini | **tidak dikerjakan** — P1, belum ada endpoint |
 | Role atasan | **tidak dipakai** di M13 (PRD #7) |
 | Warna badge `cuti`: `info` atau `neutral` | sementara **`info`**; ubah 1 baris di `Badge.tsx` (`design.md` TBD) |
 | Kolom "Total Jam Kerja" di rekap | belum, `design.md` TBD |
-| Pencarian global di navbar | tampil tapi **nonaktif** (di luar scope M13) |
+| Pencarian global lintas modul | belum ada. Yang aktif hari ini: kolom cari navbar menyaring daftar **di halaman yang sedang dibuka** |
+| Pencarian di toolbar tabel (Panduan UI 3 · Tabel) | **dipindah ke navbar** supaya tidak ada dua kotak cari untuk hal yang sama; kotak filter (status/bulan) tetap di toolbar |
+| Input tanggal & jam bawaan browser | teksnya mengikuti bahasa browser (`mm/dd/yyyy`, `08:00 AM`), bukan format panduan (`5 Okt 2026`) karena `<input type="date">`/`type="time"` tidak bisa diubah. Butuh pemilih tanggal buatan sendiri bila wajib persis |
+| Mode gelap | **tidak dipakai** (PRD tidak meminta). Nilai gelap Lampiran PDF tetap tersimpan di `tokens.css`, aktif lewat `data-theme="dark"` |
 | Tombol "Simpan" di header halaman (design.md 4.1) | **tidak dipasang** — `design.md` 4.1 menggambar 2 tombol utama sedangkan Panduan UI melarang >1 tombol utama per layar. **PDF menang**; satu tombol utama ada di kanan bawah form. |
 | Focus trap penuh di Dialog | tidak ada; cukup fokus awal ke "Batal" + Escape |
 | Test otomatis | belum ada |
@@ -578,8 +602,9 @@ Jalankan `npm run dev`. Ganti peran lewat penukar peran di navbar.
 2. Pastikan BE mengikuti [§5](#5-kontrak-api--daftar-endpoint-yang-dibutuhkan-be) (termasuk amplop galat + `fields`).
 3. Kalau ada beda nama field/path, sesuaikan **hanya** `src/lib/api/kehadiran.ts` dan `src/lib/types/index.ts` ([§6](#6-titik-revisi-kontrak--satu-perubahan-satu-file)).
 4. Kalau BE memakai cookie session, tambahkan `credentials: "include"` di `src/lib/api/client.ts`.
-5. Jalankan smoke test manual per AC di [§8.1](#81-uji-manual-per-acceptance-criteria).
-6. Mock boleh tetap hidup (tidak dipanggil) — tidak perlu dihapus.
+5. **Halaman masuk perlu penyesuaian** (belum ada kontraknya): `src/lib/api/auth.ts` memanggil `GET /accounts` dan `POST/DELETE /session` pada BE. Kalau BE memakai SSO/token, ganti isi file itu + `LoginPage.tsx`; cookie `araya_employee` diganti mekanisme BE, dan `requireSession()` di `src/lib/auth/session.ts` disesuaikan.
+6. Jalankan smoke test manual per AC di [§8.1](#81-uji-manual-per-acceptance-criteria).
+7. Mock boleh tetap hidup (tidak dipanggil) — tidak perlu dihapus.
 
 ---
 
@@ -587,8 +612,9 @@ Jalankan `npm run dev`. Ganti peran lewat penukar peran di navbar.
 
 1. Connect repo → preset **Next.js**.
 2. Build command `npm run build`, publish dir `.next` (ditangani Next.js runtime Netlify).
-3. Env di Netlify: `NEXT_PUBLIC_USE_MOCK=true` (cukup untuk demo kampus), `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_DEFAULT_ROLE`.
-4. ⚠️ Tidak dikonfigurasi/diuji di komputer ini.
+3. Env di Netlify: `NEXT_PUBLIC_USE_MOCK=true` (cukup untuk demo kampus), `NEXT_PUBLIC_API_BASE_URL`.
+4. ⚠️ Ingat: store mock in-memory → di serverless, data check-in/pengajuan bisa hilang antar-instance. Alur US1/US3/US5 tetap jalan (pengaturan disimpan di memori instance yang melayani).
+5. ⚠️ Tidak dikonfigurasi/diuji di komputer ini.
 
 ---
 

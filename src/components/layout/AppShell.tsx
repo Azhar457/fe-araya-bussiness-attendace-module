@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Navbar } from "@/components/layout/Navbar";
+import { SearchProvider } from "@/components/layout/search-context";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/Button";
 import { CloseIcon } from "@/components/ui/Icons";
@@ -27,6 +28,7 @@ export function AppShell({ role, userName, children }: AppShellProps) {
 
   return (
     <ToastProvider>
+      <SearchProvider>
       <div className="min-h-dvh bg-page">
         <header className="fixed inset-x-0 top-0 z-40 border-b border-line bg-surface">
           <Navbar userName={userName} role={role} onOpenMenu={() => setDrawerOpen(true)} />
@@ -66,6 +68,7 @@ export function AppShell({ role, userName, children }: AppShellProps) {
           </main>
         </div>
       </div>
+      </SearchProvider>
     </ToastProvider>
   );
 }

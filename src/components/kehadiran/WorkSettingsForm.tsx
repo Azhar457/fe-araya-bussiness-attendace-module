@@ -119,74 +119,105 @@ export function WorkSettingsForm() {
       {loadError ? <Banner message={loadError} onRetry={() => void load()} /> : null}
 
       {loading ? (
-        <Card className="flex max-w-form flex-col gap-5 p-5">
-          {[0, 1, 2].map((row) => (
-            <div key={row} className="flex flex-col gap-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-control w-full" />
-            </div>
-          ))}
-        </Card>
+        <div className="grid items-start gap-5 lg:grid-cols-2">
+          <Card className="flex flex-col gap-5 p-5">
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="flex flex-col gap-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-control w-full" />
+              </div>
+            ))}
+          </Card>
+          <Card className="flex flex-col gap-3 p-5">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-32" />
+          </Card>
+        </div>
       ) : null}
 
       {!loading && !loadError ? (
-        <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-          <Card className="flex max-w-form flex-col gap-5 p-5">
-            <FormField id="workStart" label="Jam masuk" required error={errors.workStart}>
-              <Input
-                type="time"
-                value={form.workStart}
-                onChange={(event) => setForm({ ...form, workStart: event.target.value })}
-                onBlur={() => validateField("workStart")}
-              />
-            </FormField>
-
-            <FormField id="workEnd" label="Jam pulang" required error={errors.workEnd}>
-              <Input
-                type="time"
-                value={form.workEnd}
-                onChange={(event) => setForm({ ...form, workEnd: event.target.value })}
-                onBlur={() => validateField("workEnd")}
-              />
-            </FormField>
-
-            <FormField
-              id="lateToleranceMinutes"
-              label="Toleransi keterlambatan"
-              required
-              error={errors.lateToleranceMinutes}
-            >
-              <div className="relative">
+        <div className="grid items-start gap-5 lg:grid-cols-2">
+          <form onSubmit={onSubmit} noValidate>
+            <Card className="flex flex-col gap-5 p-5">
+              <FormField id="workStart" label="Jam masuk" required error={errors.workStart}>
                 <Input
-                  type="number"
-                  min={0}
-                  step={1}
-                  inputMode="numeric"
-                  className="pr-7"
-                  value={form.lateToleranceMinutes}
-                  onChange={(event) => setForm({ ...form, lateToleranceMinutes: event.target.value })}
-                  onBlur={() => validateField("lateToleranceMinutes")}
+                  type="time"
+                  value={form.workStart}
+                  onChange={(event) => setForm({ ...form, workStart: event.target.value })}
+                  onBlur={() => validateField("workStart")}
                 />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-body text-muted">
-                  menit
-                </span>
-              </div>
-            </FormField>
+              </FormField>
 
+              <FormField id="workEnd" label="Jam pulang" required error={errors.workEnd}>
+                <Input
+                  type="time"
+                  value={form.workEnd}
+                  onChange={(event) => setForm({ ...form, workEnd: event.target.value })}
+                  onBlur={() => validateField("workEnd")}
+                />
+              </FormField>
+
+              <FormField
+                id="lateToleranceMinutes"
+                label="Toleransi keterlambatan"
+                required
+                error={errors.lateToleranceMinutes}
+              >
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    className="pr-7"
+                    value={form.lateToleranceMinutes}
+                    onChange={(event) => setForm({ ...form, lateToleranceMinutes: event.target.value })}
+                    onBlur={() => validateField("lateToleranceMinutes")}
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-body text-muted">
+                    menit
+                  </span>
+                </div>
+              </FormField>
+
+              {/* Tombol di dalam kartu form (Panduan UI 3 · Form). */}
+              <div className="flex justify-end gap-3 border-t border-line pt-5">
+                <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
+                  Batal
+                </Button>
+                <Button type="submit" loading={saving} loadingText="Menyimpan…">
+                  Simpan
+                </Button>
+              </div>
+            </Card>
+          </form>
+
+          <Card className="flex flex-col gap-3 p-5">
+            <h2 className="text-h3 text-text">Aturan yang sedang berlaku</h2>
+            <dl className="flex flex-col gap-2 text-body">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Jam masuk</dt>
+                <dd className="tabular-nums">{savedForm.workStart || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Jam pulang</dt>
+                <dd className="tabular-nums">{savedForm.workEnd || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Toleransi keterlambatan</dt>
+                <dd className="tabular-nums">{savedForm.lateToleranceMinutes || "0"} menit</dd>
+              </div>
+            </dl>
+            <p className="text-body text-muted">
+              Check-in setelah jam masuk ditambah toleransi dicatat sebagai terlambat, dan nilainya muncul di kolom
+              Terlambat pada rekap bulanan.
+            </p>
             <p className="text-caption text-muted">
               Terakhir diperbarui: {updatedAt ? formatDateTime(updatedAt) : "belum pernah"}
             </p>
           </Card>
-
-          <div className="flex max-w-form justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
-              Batal
-            </Button>
-            <Button type="submit" loading={saving} loadingText="Menyimpan…">
-              Simpan
-            </Button>
-          </div>
-        </form>
+        </div>
       ) : null}
     </div>
   );

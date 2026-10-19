@@ -14,6 +14,14 @@ export type Session = {
   role: Role;
 };
 
+/** Akun untuk halaman masuk. Hanya ada di mode mock sampai BE menetapkan SSO/token. */
+export type Account = {
+  id: string;
+  name: string;
+  division: string;
+  role: Role;
+};
+
 export type WorkSettings = {
   workStart: string; // "08:00"
   workEnd: string; // "17:00"

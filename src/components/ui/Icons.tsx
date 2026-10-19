@@ -87,3 +87,19 @@ export function SearchIcon(props: IconProps) {
     </Base>
   );
 }
+
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="m15 6-6 6 6 6" />
+    </Base>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="m9 6 6 6-6 6" />
+    </Base>
+  );
+}

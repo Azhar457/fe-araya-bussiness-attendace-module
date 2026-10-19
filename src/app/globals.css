@@ -4,7 +4,9 @@
 
 @layer base {
   html {
-    color-scheme: light dark;
+    /* Selalu mode terang: PRD M13 tidak meminta mode gelap. Ini juga menjaga
+       kontrol bawaan browser (input tanggal, select, scrollbar) tetap terang. */
+    color-scheme: light;
   }
   body {
     background-color: var(--bg);

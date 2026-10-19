@@ -1,4 +1,4 @@
-/* Token desain — salinan Lampiran Panduan UI Bersama v1.0.
+/* Token desain — salinan Lampiran Panduan UI Bersama v1.0 (nilai terang + gelap apa adanya).
    Jangan ubah nilai di sini tanpa PR ke Penjaga Kit. */
 :root{
     /* netral */
@@ -25,19 +25,20 @@
     --font-head:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
     --font-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
 }
-@media (prefers-color-scheme: dark){
-    :root{
-        --bg:#0E1522; --surface:#16203A; --surface-2:#1D2947;
-        --line:#2B3956; --line-strong:#6B7A96;
-        --text:#E6EBF4; --text-muted:#9FACC4;
-        --primary:#8FB1F5; --primary-hover:#A9C3F8; --primary-soft:#22335A; --on-primary:#0B1424;
-        --accent:#4CC3DE;
-        --success-fg:#86EFAC; --success-bg:#12351F; --success-solid:#4ADE80;
-        --pending-fg:#FCD34D; --pending-bg:#3A2D08; --pending-solid:#FACC15;
-        --danger-fg:#FCA5A5; --danger-bg:#451A1A; --danger-solid:#F87171;
-        --info-fg:#7DD3FC; --info-bg:#0C2E45; --info-solid:#38BDF8;
-        --neutral-fg:#CBD5E1; --neutral-bg:#27334B; --neutral-solid:#94A3B8;
-        --danger-action:#F87171; --on-danger-action:#2A0A0A;
-        --shadow:0 6px 20px rgba(0,0,0,.45);
-    }
+/* Nilai mode gelap dari Lampiran PDF v1.0, tidak ada yang diubah.
+   Tidak aktif secara bawaan karena PRD M13 tidak meminta mode gelap (arahan tim: ikut PRD);
+   untuk mengaktifkannya cukup pasang <html data-theme="dark">. */
+:root[data-theme="dark"]{
+    --bg:#0E1522; --surface:#16203A; --surface-2:#1D2947;
+    --line:#2B3956; --line-strong:#6B7A96;
+    --text:#E6EBF4; --text-muted:#9FACC4;
+    --primary:#8FB1F5; --primary-hover:#A9C3F8; --primary-soft:#22335A; --on-primary:#0B1424;
+    --accent:#4CC3DE;
+    --success-fg:#86EFAC; --success-bg:#12351F; --success-solid:#4ADE80;
+    --pending-fg:#FCD34D; --pending-bg:#3A2D08; --pending-solid:#FACC15;
+    --danger-fg:#FCA5A5; --danger-bg:#451A1A; --danger-solid:#F87171;
+    --info-fg:#7DD3FC; --info-bg:#0C2E45; --info-solid:#38BDF8;
+    --neutral-fg:#CBD5E1; --neutral-bg:#27334B; --neutral-solid:#94A3B8;
+    --danger-action:#F87171; --on-danger-action:#2A0A0A;
+    --shadow:0 6px 20px rgba(0,0,0,.45);
 }

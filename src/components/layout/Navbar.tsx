@@ -1,7 +1,13 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+
+import { AccountMenu } from "@/components/layout/AccountMenu";
+import { useSearch } from "@/components/layout/search-context";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/FormField";
+import { Input } from "@/components/ui/FormField";
 import { MenuIcon, SearchIcon } from "@/components/ui/Icons";
-import { ROLE_COOKIE, ROLE_LABEL } from "@/lib/auth/constants";
 import type { Role } from "@/lib/types";
 
 export type NavbarProps = {
@@ -11,6 +17,14 @@ export type NavbarProps = {
 };
 
 export function Navbar({ userName, role, onOpenMenu }: NavbarProps) {
+  const pathname = usePathname();
+  const { query, setQuery, target } = useSearch();
+
+  // Pencarian mulai kosong setiap pindah halaman.
+  useEffect(() => {
+    setQuery("");
+  }, [pathname, setQuery]);
+
   return (
     <div className="flex h-navbar items-center gap-4 px-4">
       <Button
@@ -23,53 +37,30 @@ export function Navbar({ userName, role, onOpenMenu }: NavbarProps) {
 
       <p className="text-h3 whitespace-nowrap text-text">Araya Business Hub</p>
 
-      <div className="mx-auto hidden max-w-form flex-1 items-center md:flex">
-        <label htmlFor="global-search" className="sr-only">
-          Cari
-        </label>
-        <span className="relative flex w-full items-center">
-          <span className="absolute left-3 text-muted" aria-hidden>
-            <SearchIcon size={20} />
-          </span>
-          <Input
-            id="global-search"
-            type="search"
-            disabled
-            placeholder="Cari…"
-            className="pl-6"
-          />
-        </span>
-      </div>
-
-      <div className="ml-auto flex items-center gap-3">
-        {/* Simulasi session: penukar peran hanya ada saat mode mock. */}
-        <label htmlFor="role-switcher" className="sr-only">
-          Peran (demo)
-        </label>
-        <Select
-          id="role-switcher"
-          defaultValue={role}
-          onChange={(event) => {
-            document.cookie = `${ROLE_COOKIE}=${event.target.value}; path=/; max-age=604800`;
-            window.location.reload();
-          }}
-          className="w-auto text-caption"
-        >
-          <option value="admin_hr">Admin HR</option>
-          <option value="karyawan">Karyawan</option>
-        </Select>
-
-        <div className="flex items-center gap-2">
-          <span className="hidden text-caption text-muted sm:inline">
-            {userName} · {ROLE_LABEL[role]}
-          </span>
-          <span
-            aria-hidden
-            className="flex size-6 items-center justify-center rounded-full bg-primary-soft text-caption font-semibold text-primary"
-          >
-            {userName.charAt(0)}
+      {/* Halaman yang tidak punya daftar tidak menampilkan kolom cari (tidak ada kontrol mati). */}
+      {target ? (
+        <div className="mx-auto hidden max-w-form flex-1 items-center md:flex">
+          <label htmlFor="global-search" className="sr-only">
+            {target}
+          </label>
+          <span className="relative flex w-full items-center">
+            <span className="absolute left-3 text-muted" aria-hidden>
+              <SearchIcon size={20} />
+            </span>
+            <Input
+              id="global-search"
+              type="search"
+              placeholder={target}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="pl-6"
+            />
           </span>
         </div>
+      ) : null}
+
+      <div className="ml-auto flex items-center gap-3">
+        <AccountMenu userName={userName} role={role} />
       </div>
     </div>
   );
