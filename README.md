@@ -492,6 +492,8 @@ Semua di prefix `/api/mock`, **khusus dev**. Semua `force-dynamic` supaya tidak 
 
 **Seed data** (`src/mocks/store.ts`):
 
+> ⚠️ **Fixture sementara, bukan sumber kebenaran.** Isinya dirancang **perlu** agar tiap AC bisa dibuktikan tanpa input manual: AC2 US5 butuh bulan berisi + bulan kosong, AC2 US4 butuh cuti `approved` + pengajuan `pending` pada orang berbeda, AC1/2 US2 butuh hari ini **kosong**. Jangan dikosongkan (demo jadi tidak bisa dibuktikan) dan **jangan ditambah** (showcase memakai data yang sama dengan data uji). Setelah ERD/API contract SA keluar, cukup sesuaikan nama field & nilai di file ini — halaman tidak perlu diubah ([§6](#6-titik-revisi-kontrak--satu-perubahan-satu-file)).
+
 - Pengaturan: 08:00–17:00, toleransi 15 menit.
 - 3 karyawan: `emp-1` Rani Kusumawati (**admin_hr**, HR), `emp-2` Budi Santoso (**karyawan**, Keuangan), `emp-3` Sinta Maharani (karyawan, Operasional).
 - Kehadiran hari ini **kosong** untuk `emp-2` supaya alur check-in → deteksi terlambat → check-out bisa didemokan utuh.
@@ -558,6 +560,7 @@ Jalankan `npm run dev`. Ganti peran lewat penukar peran di navbar.
 | `DELETE` pengajuan (endpoint #9) + kolom Aksi | interpretasi FE, menunggu konfirmasi SA |
 | Autentikasi nyata (token/header/cookie) | belum; mock pakai cookie role |
 | Ekspor rekap (CSV/XLSX) | **tidak dikerjakan** — P1 (PRD #8) |
+| **Riwayat kehadiran karyawan + status `cuti` & legenda** (Sprint Plan `US4-06`, PIC FE, 1 Nov) | **belum ada halamannya.** Kolom `cuti` di rekap tidak menutup ini. Butuh daftar riwayat + legenda status → endpoint baru (ambil 7 hari terakhir sebagai basis, P1 di PRD, belum ada endpoint) |
 | Riwayat 7 hari terakhir di halaman Hari ini | **tidak dikerjakan** — P1, belum ada endpoint |
 | Role atasan | **tidak dipakai** di M13 (PRD #7) |
 | Warna badge `cuti`: `info` atau `neutral` | sementara **`info`**; ubah 1 baris di `Badge.tsx` (`design.md` TBD) |
