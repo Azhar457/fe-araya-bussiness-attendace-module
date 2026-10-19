@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: light dark;
+  }
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    line-height: 1.375rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-head);
+  }
+  /* Fokus terlihat untuk semua elemen interaktif (fokus keyboard). */
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Satu-satunya area yang boleh bergulir ke samping. */
+  .table-scroll {
+    overflow-x: auto;
+  }
+  .skip-link {
+    position: absolute;
+    left: var(--space-4);
+    top: calc(var(--space-4) * -4);
+    z-index: 50;
+    background-color: var(--surface);
+    color: var(--primary);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+  }
+  .skip-link:focus {
+    top: var(--space-4);
+  }
+}
