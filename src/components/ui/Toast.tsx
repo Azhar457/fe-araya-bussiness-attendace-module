@@ -45,10 +45,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (toast: ToastInput) => {
       const id = nextId.current++;
       setItems((current) => [...current, { ...toast, id }]);
-      // Sukses & info hilang sendiri 5 detik; peringatan & galat tetap tampil.
-      if (toast.variant === "success" || toast.variant === "info") {
-        setTimeout(() => dismiss(id), 5000);
-      }
+      // Sukses & info: 5 detik (Panduan UI 3 · Notifikasi).
+      // Galat & peringatan: 4 detik (permintaan review — semua notifikasi
+      // auto-hilang dalam 3–5 detik; tombol × tetap tersedia untuk tutup cepat).
+      setTimeout(() => dismiss(id), toast.variant === "danger" || toast.variant === "pending" ? 4000 : 5000);
     },
     [dismiss],
   );

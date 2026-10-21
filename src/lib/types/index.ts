@@ -50,6 +50,26 @@ export type AbsenceRequest = {
   createdAt: string;
 };
 
+/** AbsenceRequest + metadata karyawan (nama/divisi) — dipakai daftar approval HR. */
+export type AbsenceRequestWithMeta = AbsenceRequest & {
+  employeeName: string;
+  employeeDivision: string;
+};
+
+export type AttendanceHistoryRow = {
+  tanggal: string; // "YYYY-MM-DD" atau "—" bila slot kosong
+  jam_check_in: string | null; // "HH:MM"
+  jam_check_out: string | null; // "HH:MM"
+  status: AttendanceStatus;
+  lokasi: string | null;
+};
+
+export type LeaveQuota = {
+  total: number;
+  used: number;
+  remaining: number;
+};
+
 export type MonthlySummaryRow = {
   employeeId: string;
   name: string;

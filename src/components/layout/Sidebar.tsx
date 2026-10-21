@@ -17,16 +17,18 @@ export function Sidebar({ role, pathname, onNavigate }: SidebarProps) {
       <ul className="flex flex-col gap-1">
         {NAV_BY_ROLE[role].map((item) => {
           const active = pathname === item.href;
+          const Icon = item.icon;
           return (
             <li key={item.href}>
               <Link
                 href={item.href}
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
-                className={`flex h-control items-center rounded-sm px-3 text-body ${
+                className={`flex h-control items-center gap-2.5 rounded-sm px-3 text-body ${
                   active ? "bg-primary-soft font-semibold text-primary" : "text-text hover:bg-surface-2"
                 }`}
               >
+                <Icon aria-hidden size={16} className="shrink-0" />
                 {item.label}
               </Link>
             </li>

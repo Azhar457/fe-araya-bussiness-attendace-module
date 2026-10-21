@@ -32,9 +32,16 @@ function monthOptions(): { value: string; label: string }[] {
   });
 }
 
-export function MonthlySummaryPage() {
+/** scope "team" = HR melihat seluruh tim; scope "mine" = karyawan hanya barisnya sendiri. */
+export function MonthlySummaryPage({
+  scope,
+  employeeId,
+}: {
+  scope: "team" | "mine";
+  employeeId: string;
+}) {
   const { query } = useSearch();
-  useSearchTarget("Cari nama atau divisi");
+  useSearchTarget(scope === "team" ? "Cari nama atau divisi" : "");
 
   const [month, setMonth] = useState(currentMonth());
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
@@ -72,13 +79,15 @@ export function MonthlySummaryPage() {
   }, [query]);
 
   const filtered = useMemo(() => {
-    const rows = summary?.rows ?? [];
+    const rows = scope === "mine"
+      ? (summary?.rows ?? []).filter((row) => row.employeeId === employeeId)
+      : summary?.rows ?? [];
     const keyword = query.trim().toLowerCase();
     if (!keyword) return rows;
     return rows.filter(
       (row) => row.name.toLowerCase().includes(keyword) || row.division.toLowerCase().includes(keyword),
     );
-  }, [summary, query]);
+  }, [summary, query, scope, employeeId]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -104,8 +113,12 @@ export function MonthlySummaryPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        breadcrumb={[{ label: "Kehadiran", href: homeFor("admin_hr") }, { label: "Rekap" }]}
-        title="Rekap kehadiran bulanan"
+        breadcrumb={
+          scope === "team"
+            ? [{ label: "Kehadiran", href: homeFor("admin_hr") }, { label: "Rekap" }]
+            : [{ label: "Kehadiran", href: homeFor("karyawan") }, { label: "Rekap saya" }]
+        }
+        title={scope === "team" ? "Rekap kehadiran bulanan" : "Riwayat rekap saya"}
       />
 
       <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
@@ -144,7 +157,13 @@ export function MonthlySummaryPage() {
         loading={loading}
         error={error}
         onRetry={() => void load(month)}
-        empty={<p>Tidak ada karyawan yang cocok dengan pencarian.</p>}
+        empty={
+          <p>
+            {scope === "mine"
+              ? "Belum ada data rekap bulan ini."
+              : "Tidak ada karyawan yang cocok dengan pencarian."}
+          </p>
+        }
         footer={
           <Pagination
             total={filtered.length}

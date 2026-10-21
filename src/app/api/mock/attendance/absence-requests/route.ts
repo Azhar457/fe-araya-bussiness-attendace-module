@@ -20,10 +20,18 @@ export async function GET(request: Request) {
   return NextResponse.json(rows);
 }
 
-/** POST /api/mock/attendance/absence-requests */
+/** POST /api/mock/attendance/absence-requests — terima bentuk FE ({type,startDate,...}) maupun
+    bentuk BE ({jenis, tanggal, alasan}); alasan/isi dari cookie sesi, bukan body. */
 export async function POST(request: Request) {
   const session = await getSession();
-  const body = (await request.json().catch(() => ({}))) as Partial<AbsenceInput>;
+  const raw = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+
+  const body: Partial<AbsenceInput> = {
+    type: (raw.type ?? raw.jenis) as AbsenceInput["type"] | undefined,
+    startDate: (raw.startDate ?? raw.tanggal) as string | undefined,
+    endDate: (raw.endDate ?? raw.tanggal) as string | undefined,
+    reason: (raw.reason ?? raw.alasan) as string | undefined,
+  };
 
   const fields = validateAbsence(body);
   const messages = Object.values(fields).filter(Boolean) as string[];
@@ -33,7 +41,7 @@ export async function POST(request: Request) {
 
   const state = getState();
   const record: AbsenceRequest = {
-    id: `abs-${state.absenceRequests.length + 1}`,
+    id: `abs-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`,
     employeeId: session.id,
     type: body.type!,
     startDate: body.startDate!,

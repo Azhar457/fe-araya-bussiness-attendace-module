@@ -13,6 +13,7 @@ import { ApiError } from "@/lib/api/client";
 import { checkIn, checkOut, getToday, getWorkSettings } from "@/lib/api/kehadiran";
 import { homeFor } from "@/lib/auth/constants";
 import { formatDateLong, formatTime } from "@/lib/format";
+import { GeoError, getCurrentPosition } from "@/lib/geo";
 import type { TodayAttendance, WorkSettings } from "@/lib/types";
 
 export function TodayCard() {
@@ -44,8 +45,22 @@ export function TodayCard() {
   async function submit(action: "check-in" | "check-out") {
     setSubmitting(true);
     try {
-      const updated = action === "check-in" ? await checkIn() : await checkOut();
+      // Ambil koordinat GPS + sinyal spoof sebelum kirim ke BE.
+      const geo = await getCurrentPosition();
+      const updated = action === "check-in"
+        ? await checkIn(geo)
+        : await checkOut(geo);
       setAttendance(updated);
+
+      // Peringatan spoof: koordinat terkirim, tapi flag curiga ditunjukkan ke user.
+      if (geo.spoof.suspect) {
+        push({
+          variant: "pending",
+          title: "Geolokasi terlihat tidak wajar",
+          description: geo.spoof.reasons.join("; "),
+        });
+      }
+
       push({
         variant: "success",
         title: action === "check-in" ? "Check-in tercatat" : "Check-out tercatat",
@@ -55,7 +70,10 @@ export function TodayCard() {
             : "Waktu tercatat memakai jam server WIB.",
       });
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Koneksi terputus. Coba lagi.";
+      let message = error instanceof ApiError ? error.message : "Koneksi terputus. Coba lagi.";
+      if (error instanceof GeoError) {
+        message = `Geolokasi gagal (${error.code}). Pastikan izin lokasi diaktifkan lalu coba lagi.`;
+      }
       // AC M13-US2#2: percobaan check-in kedua ditolak sistem.
       push({ variant: "danger", title: "Gagal mencatat kehadiran", description: message });
       void load();

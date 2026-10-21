@@ -10,8 +10,15 @@ export async function GET() {
   return NextResponse.json(getState().workSettings);
 }
 
-/** PUT /api/mock/attendance/work-settings */
+/** PUT / POST /api/mock/attendance/work-settings — kontrak BE pakai POST, mock juga menerima PUT. */
 export async function PUT(request: Request) {
+  return upsert(request);
+}
+export async function POST(request: Request) {
+  return upsert(request);
+}
+
+async function upsert(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Partial<WorkSettingsInput>;
 
   const input: Partial<WorkSettingsInput> = {

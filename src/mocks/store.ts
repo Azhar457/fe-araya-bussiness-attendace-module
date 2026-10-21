@@ -133,15 +133,26 @@ function seed(): MockState {
   };
 }
 
-let state: MockState = seed();
+/**
+ * State di-pin ke globalThis: di Next dev, tiap route handler bisa punya
+ * instans modul terpisah — tanpa global, check-in tidak terlihat oleh
+ * /today dan keputusan HR tidak sampai ke riwayat karyawan. Selain itu
+ * globalThis bertahan saat hot-reload (seed tidak ikut ulang tiap edit file).
+ */
+const GLOBAL_KEY = "__arayaMockState__" as const;
+
+type GlobalWithStore = typeof globalThis & { [GLOBAL_KEY]?: MockState };
 
 export function getState(): MockState {
-  return state;
+  const g = globalThis as GlobalWithStore;
+  g[GLOBAL_KEY] ??= seed();
+  return g[GLOBAL_KEY]!;
 }
 
 export function resetState(): MockState {
-  state = seed();
-  return state;
+  const g = globalThis as GlobalWithStore;
+  g[GLOBAL_KEY] = seed();
+  return g[GLOBAL_KEY]!;
 }
 
 export function emptyAttendance(date: string): TodayAttendance {
