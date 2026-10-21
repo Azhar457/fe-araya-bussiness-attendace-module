@@ -99,7 +99,8 @@ export function RekapitulasiBulan({ employeeId }: { employeeId: string }) {
         {history.length === 0 ? (
           <p className="mt-3 text-body text-muted">Belum ada riwayat presensi bulan ini.</p>
         ) : (
-          <table className="mt-3 w-full border-collapse text-body">
+          <div className="table-scroll mt-3">
+          <table className="w-full border-collapse text-body">
             <thead>
               <tr className="border-b border-line text-left text-caption text-muted">
                 <th scope="col" className="py-2 pr-3 font-semibold">Tanggal</th>
@@ -127,6 +128,7 @@ export function RekapitulasiBulan({ employeeId }: { employeeId: string }) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </div>

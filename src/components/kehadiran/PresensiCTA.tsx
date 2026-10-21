@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { Download, LogIn, LogOut } from "lucide-react";
+import { Download, LogIn, LogOut, Clock } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -13,10 +13,13 @@ import {
   checkOut,
   getAttendanceHistory,
   getToday,
+  getWorkSettings,
 } from "@/lib/api/kehadiran";
 import { getCurrentPosition, GeoError } from "@/lib/geo";
 import { notifyAttendanceChanged } from "@/lib/attendance-events";
-import type { AttendanceHistoryRow, TodayAttendance } from "@/lib/types";
+import { timeToMinutes } from "@/lib/format";
+import { useWibClock } from "@/lib/useWibClock";
+import type { AttendanceHistoryRow, TodayAttendance, WorkSettings } from "@/lib/types";
 
 /**
  * Kartu CTA presensi besar + tombol "Export Log" sesuai mockup:
@@ -25,13 +28,17 @@ import type { AttendanceHistoryRow, TodayAttendance } from "@/lib/types";
 export function PresensiCTA() {
   const { push } = useToast();
   const [attendance, setAttendance] = useState<TodayAttendance | null>(null);
+  const [settings, setSettings] = useState<WorkSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const clock = useWibClock();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setAttendance(await getToday());
+      const [today, ws] = await Promise.all([getToday(), getWorkSettings()]);
+      setAttendance(today);
+      setSettings(ws);
     } catch (err) {
       push({
         variant: "danger",
@@ -50,6 +57,10 @@ export function PresensiCTA() {
 
   const sudahCheckIn = Boolean(attendance?.checkInAt);
   const sudahKeluar = Boolean(attendance?.checkOutAt);
+
+  /** Tombol presensi keluar hanya muncul saat jam sekarang sudah >= jam pulang. */
+  const nowMin = timeToMinutes(clock.slice(0, 5));
+  const bolehKeluar = !settings?.workEnd ? false : nowMin >= timeToMinutes(settings.workEnd);
 
   async function submit() {
     setSubmitting(true);
@@ -143,16 +154,34 @@ export function PresensiCTA() {
 
       {sudahKeluar ? (
         <p className="text-body text-success-fg">Presensi hari ini sudah lengkap.</p>
+      ) : sudahCheckIn ? (
+        bolehKeluar ? (
+          <Button
+            variant="primary"
+            loading={submitting}
+            loadingText="Memproses…"
+            onClick={() => void submit()}
+            leftIcon={<LogOut aria-hidden size={16} />}
+            className="w-full h-control"
+          >
+            Presensi Keluar Sekarang
+          </Button>
+        ) : (
+          <p className="flex items-center gap-2 text-body text-muted">
+            <Clock aria-hidden size={16} />
+            Menunggu waktu pulang ({settings?.workEnd}). Presensi keluar aktif setelah jam ini.
+          </p>
+        )
       ) : (
         <Button
           variant="primary"
           loading={submitting}
           loadingText="Memproses…"
           onClick={() => void submit()}
-          leftIcon={sudahCheckIn ? <LogOut aria-hidden size={16} /> : <LogIn aria-hidden size={16} />}
+          leftIcon={<LogIn aria-hidden size={16} />}
           className="w-full h-control"
         >
-          {sudahCheckIn ? "Presensi Keluar Sekarang" : "Presensi Masuk Sekarang"}
+          Presensi Masuk Sekarang
         </Button>
       )}
 

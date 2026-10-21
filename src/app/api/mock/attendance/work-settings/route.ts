@@ -19,13 +19,27 @@ export async function POST(request: Request) {
 }
 
 async function upsert(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as Partial<WorkSettingsInput>;
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // Terima kedua shape: BE (jam_masuk/jam_pulang/toleransi_keterlambatan)
+  // dan FE (workStart/workEnd/lateToleranceMinutes).
+  const workStart =
+    typeof body.jam_masuk === "string" ? body.jam_masuk.slice(0, 5)
+    : typeof body.workStart === "string" ? body.workStart
+    : undefined;
+  const workEnd =
+    typeof body.jam_pulang === "string" ? body.jam_pulang.slice(0, 5)
+    : typeof body.workEnd === "string" ? body.workEnd
+    : undefined;
+  const lateToleranceMinutes =
+    body.toleransi_keterlambatan !== undefined ? Number(body.toleransi_keterlambatan)
+    : body.lateToleranceMinutes !== undefined ? Number(body.lateToleranceMinutes)
+    : undefined;
 
   const input: Partial<WorkSettingsInput> = {
-    workStart: typeof body.workStart === "string" ? body.workStart : undefined,
-    workEnd: typeof body.workEnd === "string" ? body.workEnd : undefined,
-    lateToleranceMinutes:
-      body.lateToleranceMinutes === undefined ? undefined : Number(body.lateToleranceMinutes),
+    workStart,
+    workEnd,
+    lateToleranceMinutes,
   };
 
   const fields = validateWorkSettings(input);
