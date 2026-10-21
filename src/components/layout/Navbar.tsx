@@ -32,6 +32,7 @@ export function Navbar({ userName, role, onOpenMenu }: NavbarProps) {
         size="icon"
         aria-label="Buka menu"
         leftIcon={<MenuIcon size={24} />}
+        onClick={onOpenMenu}
         className="lg:hidden"
       />
 
