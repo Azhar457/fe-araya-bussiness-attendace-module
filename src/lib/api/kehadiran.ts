@@ -71,7 +71,7 @@ export function getToday(): Promise<LiveToday> {
   return request<LiveToday>("/api/attendance/today");
 }
 
-/** POST /api/attendance/check-in */
+/** POST /api/attendance/check-in (SA v0.2 — identitas dari header X-Employee-Id). */
 export function checkIn(): Promise<LiveCheckInResult> {
   return request<LiveCheckInResult>("/api/attendance/check-in", {
     method: "POST",
@@ -92,6 +92,7 @@ export function checkOut(): Promise<LiveCheckInResult> {
 /* ------------------------------------------------------------------ */
 
 export type LeaveInput = {
+  karyawan_id: number; // di body (BEx deployed: `POST` baca `karyawan_id` dari JSON, bukan header)
   tanggal: string; // YYYY-MM-DD
   jenis: "izin" | "sakit";
   alasan: string;
@@ -102,7 +103,7 @@ export function listLeaves(): Promise<LiveLeaveList> {
   return request<LiveLeaveList>("/api/leave-permissions");
 }
 
-/** POST /api/leave-permissions — ajukan izin/sakit (header X-Employee-Id). */
+/** POST /api/leave-permissions — ajukan izin/sakit (`karyawan_id` di body). */
 export function submitLeave(input: LeaveInput): Promise<LiveLeaveResult> {
   return request<LiveLeaveResult>("/api/leave-permissions", {
     method: "POST",

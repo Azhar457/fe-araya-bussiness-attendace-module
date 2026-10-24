@@ -16,13 +16,13 @@ import type { LiveLeaveList } from "@/lib/types";
 
 type LeaveRow = LiveLeaveList["data"][number];
 
-const EMPTY: LeaveInput = { tanggal: "", jenis: "izin", alasan: "" };
+const EMPTY: LeaveInput = { karyawan_id: 0, tanggal: "", jenis: "izin", alasan: "" };
 
 /**
  * M13-US3 — form pengajuan izin/sakit (karyawan) + riwayat singkat di bawah.
  * Data 100% dari BE LIVE: listLeaves (GET) + submitLeave (POST /api/leave-permissions).
  */
-export function AbsenceFormPage() {
+export function AbsenceFormPage({ employeeId }: { employeeId: string }) {
   const { push } = useToast();
   const [form, setForm] = useState<LeaveInput>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof LeaveInput, string>>>({});
@@ -64,7 +64,7 @@ export function AbsenceFormPage() {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      const result = await submitLeave({ ...form, alasan: form.alasan.trim() });
+      const result = await submitLeave({ ...form, karyawan_id: Number(employeeId), alasan: form.alasan.trim() });
       push({ variant: "success", title: "Pengajuan terkirim", description: result.message });
       setForm(EMPTY);
       setErrors({});

@@ -3,6 +3,6 @@ import { requireRole } from "@/lib/auth/session";
 
 /** M13-US3 — hanya Karyawan. */
 export default async function IzinPage() {
-  await requireRole("karyawan");
-  return <AbsenceFormPage />;
+  const session = await requireRole("karyawan");
+  return <AbsenceFormPage employeeId={session.employeeId} />;
 }

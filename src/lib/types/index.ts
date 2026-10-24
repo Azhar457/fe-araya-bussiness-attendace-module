@@ -85,6 +85,7 @@ export type LiveLeaveList = {
     tanggal: string;
     jenis: string;
     alasan: string;
+    created_at?: string;
     status?: string;
     karyawan_id?: number;
   }>;
