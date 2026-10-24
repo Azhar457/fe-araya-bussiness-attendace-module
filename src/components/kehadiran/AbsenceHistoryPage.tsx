@@ -1,44 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { useSearch, useSearchTarget } from "@/components/layout/search-context";
-import { ApprovalBadge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import Link from "next/link";
+import { CalendarDays, Inbox } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import { Dialog } from "@/components/ui/Dialog";
-import { FormField, Select } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
 import { Table, type Column } from "@/components/ui/Table";
-import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/client";
-import { cancelAbsenceRequest, listAbsenceRequests } from "@/lib/api/kehadiran";
-import { homeFor } from "@/lib/auth/constants";
+import { listLeaves } from "@/lib/api/kehadiran";
 import { formatDate } from "@/lib/format";
-import type { AbsenceRequest } from "@/lib/types";
+import type { LiveLeaveList } from "@/lib/types";
 
-/** M13-US3 — riwayat pengajuan milik karyawan yang sedang masuk. */
+type LeaveRow = LiveLeaveList["data"][number];
+
+/**
+ * M13-US3 — riwayat pengajuan izin/sakit milik karyawan (tabel penuh).
+ * Sumber data BE LIVE: listLeaves (GET /api/leave-permissions, header X-Employee-Id).
+ */
 export function AbsenceHistoryPage() {
-  const { push } = useToast();
-  const { query } = useSearch();
-  useSearchTarget("Cari alasan pengajuan");
-
-  const [rows, setRows] = useState<AbsenceRequest[]>([]);
+  const [rows, setRows] = useState<LeaveRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  const [cancelling, setCancelling] = useState<AbsenceRequest | null>(null);
-  const [cancelLoading, setCancelLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setRows(await listAbsenceRequests());
+      const result = await listLeaves();
+      setRows(result.data ?? []);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Gagal memuat riwayat pengajuan.");
     } finally {
@@ -50,147 +41,89 @@ export function AbsenceHistoryPage() {
     void load();
   }, [load]);
 
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return rows
-      .filter((row) => !statusFilter || row.status === statusFilter)
-      .filter((row) => !keyword || row.reason.toLowerCase().includes(keyword));
-  }, [rows, query, statusFilter]);
+  const sorted = [...rows].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  async function onConfirmCancel() {
-    if (!cancelling) return;
-    setCancelLoading(true);
-    try {
-      await cancelAbsenceRequest(cancelling.id);
-      setCancelling(null);
-      await load();
-      push({ variant: "success", title: "Pengajuan dibatalkan", description: "Pengajuan dihapus dari daftar." });
-    } catch (caught) {
-      push({
-        variant: "danger",
-        title: "Pengajuan gagal dibatalkan",
-        description: caught instanceof ApiError ? caught.message : "Koneksi terputus. Coba lagi.",
-      });
-    } finally {
-      setCancelLoading(false);
-    }
-  }
-
-  const columns: Column<AbsenceRequest>[] = [
+  const columns: Column<LeaveRow>[] = [
     {
       key: "tanggal",
       header: "Tanggal",
-      render: (row) => (
-        <span className="whitespace-nowrap">
-          {row.startDate === row.endDate
-            ? formatDate(row.startDate)
-            : `${formatDate(row.startDate)} – ${formatDate(row.endDate)}`}
-        </span>
-      ),
+      render: (row) => <span className="text-body text-text tabular-nums">{formatDate(row.tanggal)}</span>,
     },
     {
       key: "jenis",
       header: "Jenis",
-      render: (row) => (row.type === "izin" ? "Izin" : "Sakit"),
+      render: (row) => <span className="text-body capitalize text-text">{row.jenis}</span>,
     },
     {
       key: "alasan",
       header: "Alasan",
-      render: (row) => (
-        <span className="block max-w-form truncate" title={row.reason}>
-          {row.reason}
-        </span>
-      ),
+      render: (row) => <span className="text-body text-muted">{row.alasan || "—"}</span>,
     },
     {
       key: "status",
       header: "Status",
-      render: (row) => <ApprovalBadge status={row.status} />,
-    },
-    {
-      key: "aksi",
-      header: "Aksi",
-      align: "right",
       render: (row) =>
-        row.status === "pending" ? (
-          <Button variant="tertiary" size="sm" onClick={() => setCancelling(row)}>
-            Batalkan
-          </Button>
-        ) : (
-          <span className="text-muted">—</span>
-        ),
+        row.status ? <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge> : <span className="text-body text-muted">—</span>,
     },
   ];
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        breadcrumb={[
-          { label: "Kehadiran", href: homeFor("karyawan") },
-          { label: "Izin & sakit", href: "/kehadiran/izin" },
-          { label: "Riwayat" },
-        ]}
-        title="Riwayat pengajuan"
+        breadcrumb={[{ label: "Kehadiran", href: "/kehadiran/hari-ini" }, { label: "Izin & Sakit" }, { label: "Riwayat" }]}
+        title="Riwayat Izin & Sakit"
       />
 
-      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
-        <FormField id="filter-status" label="Filter status">
-          <Select
-            className="sm:w-56"
-            value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value);
-              setPage(1);
-            }}
+      {loading ? (
+        <Card className="flex flex-col items-center gap-3 p-10">
+          <Inbox aria-hidden size={32} className="text-muted" />
+          <p className="text-body text-muted">Memuat riwayat pengajuan…</p>
+        </Card>
+      ) : error ? (
+        <Card className="flex flex-col gap-3 p-5">
+          <p className="text-body text-danger-fg">{error}</p>
+          <button type="button" onClick={() => void load()} className="text-label text-primary hover:text-primary-hover">
+            Coba lagi
+          </button>
+        </Card>
+      ) : sorted.length === 0 ? (
+        <Card className="flex flex-col items-center gap-4 p-10 text-center">
+          <div className="flex size-12 items-center justify-center rounded-full bg-surface-2 text-muted">
+            <CalendarDays aria-hidden size={24} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="text-h3 text-text">Belum ada pengajuan</p>
+            <p className="text-body text-muted">Anda belum pernah mengajukan izin atau sakit.</p>
+          </div>
+          <Link
+            href="/kehadiran/izin"
+            className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-label text-on-primary hover:bg-primary-hover"
           >
-            <option value="">Semua status</option>
-            <option value="pending">Menunggu</option>
-            <option value="approved">Disetujui</option>
-            <option value="rejected">Ditolak</option>
-          </Select>
-        </FormField>
-      </Card>
-
-      <Table
-        caption="Riwayat pengajuan izin dan sakit"
-        columns={columns}
-        rows={pageRows}
-        rowKey={(row) => row.id}
-        loading={loading}
-        error={error}
-        onRetry={() => void load()}
-        empty={<p>Tidak ada pengajuan yang cocok.</p>}
-        footer={
-          <Pagination
-            total={filtered.length}
-            page={currentPage}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setPage(1);
-            }}
-          />
-        }
-      />
-
-      <Dialog
-        open={Boolean(cancelling)}
-        title={
-          cancelling
-            ? `Batalkan pengajuan ${cancelling.type} tanggal ${formatDate(cancelling.startDate)}?`
-            : ""
-        }
-        description="Pengajuan yang dibatalkan tidak bisa dikembalikan."
-        confirmLabel="Batalkan pengajuan"
-        loading={cancelLoading}
-        onConfirm={() => void onConfirmCancel()}
-        onCancel={() => setCancelling(null)}
-      />
+            Ajukan lewat menu Izin &amp; Sakit
+          </Link>
+        </Card>
+      ) : (
+        <Table
+          caption="Riwayat pengajuan izin/sakit"
+          columns={columns}
+          rows={sorted}
+          rowKey={(row) => `${row.tanggal}-${row.jenis}-${row.id ?? row.alasan}`}
+        />
+      )}
     </div>
   );
+}
+
+function statusLabel(status: string): string {
+  const map: Record<string, string> = { pending: "Menunggu", approved: "Disetujui", rejected: "Ditolak" };
+  return map[status] ?? status;
+}
+
+function statusTone(status: string): "success" | "pending" | "danger" | "info" | "neutral" {
+  const map: Record<string, "success" | "pending" | "danger" | "info" | "neutral"> = {
+    pending: "pending",
+    approved: "success",
+    rejected: "danger",
+  };
+  return map[status] ?? "neutral";
 }

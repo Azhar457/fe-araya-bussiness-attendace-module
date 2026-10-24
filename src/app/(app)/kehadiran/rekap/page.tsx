@@ -7,7 +7,7 @@ export default async function RekapPage() {
   return (
     <MonthlySummaryPage
       scope={session.role === "admin_hr" ? "team" : "mine"}
-      employeeId={session.id}
+      employeeId={session.employeeId}
     />
   );
 }

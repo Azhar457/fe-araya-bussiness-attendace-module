@@ -3,8 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { logout } from "@/lib/api/auth";
-import { ROLE_LABEL } from "@/lib/auth/constants";
+import { EMPLOYEE_COOKIE, ROLE_LABEL } from "@/lib/auth/constants";
 import type { Role } from "@/lib/types";
 
 /** Menu akun di kanan navbar (Panduan UI 4 · Kerangka halaman). */
@@ -30,16 +29,11 @@ export function AccountMenu({ userName, role }: { userName: string; role: Role }
     };
   }, [open]);
 
-  async function onLogout() {
+  function onLogout() {
     setBusy(true);
-    try {
-      await logout();
-    } catch {
-      // shortcut: bila permintaan gagal, cookie sesi belum benar-benar dihapus.
-    } finally {
-      router.push("/masuk");
-      router.refresh();
-    }
+    document.cookie = `${EMPLOYEE_COOKIE}=; path=/; max-age=0`;
+    router.push("/masuk");
+    router.refresh();
   }
 
   return (
@@ -74,7 +68,7 @@ export function AccountMenu({ userName, role }: { userName: string; role: Role }
           <button
             type="button"
             role="menuitem"
-            onClick={() => void onLogout()}
+            onClick={onLogout}
             disabled={busy}
             className="flex h-control-sm w-full items-center rounded-sm px-2 text-left text-body text-text hover:bg-surface-2 disabled:text-muted"
           >

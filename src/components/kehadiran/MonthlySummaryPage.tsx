@@ -1,38 +1,36 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { useSearch, useSearchTarget } from "@/components/layout/search-context";
 import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
 import { FormField, Select } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
 import { Table, type Column } from "@/components/ui/Table";
 import { ApiError } from "@/lib/api/client";
-import { getApprovedLeave, getMonthlySummary } from "@/lib/api/kehadiran";
-import { homeFor } from "@/lib/auth/constants";
-import { currentMonth, formatDate, formatMonthLabel, monthRange } from "@/lib/format";
-import type { ApprovedLeave, MonthlySummary, MonthlySummaryRow } from "@/lib/types";
+import { getRecap } from "@/lib/api/kehadiran";
+import { currentMonth, formatMonthLabel } from "@/lib/format";
+import type { LiveRecap } from "@/lib/types";
 
-/** Angka rata kanan + sejajar (Panduan UI bagian "Angka di tabel"). */
-function num(value: number) {
-  return <span className="tabular-nums">{value}</span>;
+const BULAN_LABEL = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+const TAHUN_LIST = [2025, 2026, 2027];
+
+type RecapRow = NonNullable<LiveRecap["data"]>["rekap"][number];
+
+function defaultBulanTahun(): { bulan: number; tahun: number } {
+  const [tahun, bulan] = currentMonth().split("-").map(Number);
+  return { bulan, tahun };
 }
 
-/** 12 bulan terakhir dengan label bahasa Indonesia ("Oktober 2026").
-    Dipakai menggantikan <input type="month"> yang teksnya mengikuti bahasa browser,
-    bukan format wajib Panduan UI ("Okt 2026"). */
-function monthOptions(): { value: string; label: string }[] {
-  const [year, month] = currentMonth().split("-").map(Number);
-  return Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(year, month - 1 - index, 1);
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    return { value, label: formatMonthLabel(value) };
-  });
-}
-
-/** scope "team" = HR melihat seluruh tim; scope "mine" = karyawan hanya barisnya sendiri. */
+/**
+ * M13-US5 — rekap bulanan.
+ * Karyawan: filter baris rekap oleh karyawan_id === session.employeeId.
+ * HR: tampilkan semua baris + ringkasan total.
+ */
 export function MonthlySummaryPage({
   scope,
   employeeId,
@@ -40,143 +38,124 @@ export function MonthlySummaryPage({
   scope: "team" | "mine";
   employeeId: string;
 }) {
-  const { query } = useSearch();
-  useSearchTarget(scope === "team" ? "Cari nama atau divisi" : "");
-
-  const [month, setMonth] = useState(currentMonth());
-  const [summary, setSummary] = useState<MonthlySummary | null>(null);
-  const [leave, setLeave] = useState<ApprovedLeave[]>([]);
+  const initial = defaultBulanTahun();
+  const [bulan, setBulan] = useState(initial.bulan);
+  const [tahun, setTahun] = useState(initial.tahun);
+  const [recap, setRecap] = useState<LiveRecap["data"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
 
-  const load = useCallback(async (targetMonth: string) => {
+  const load = useCallback(async (targetBulan: number, targetTahun: number) => {
     setLoading(true);
     setError(null);
     try {
-      const { from, to } = monthRange(targetMonth);
-      const [summaryData, leaveData] = await Promise.all([
-        getMonthlySummary(targetMonth),
-        getApprovedLeave(from, to),
-      ]);
-      setSummary(summaryData);
-      setLeave(leaveData);
+      const result = await getRecap(targetBulan, targetTahun);
+      setRecap(result.data);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Gagal memuat rekap kehadiran.");
+      setError(caught instanceof ApiError ? caught.message : "Gagal memuat rekap.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load(month);
-  }, [load, month]);
+    void load(bulan, tahun);
+  }, [load, bulan, tahun]);
 
-  // Pencarian dari navbar selalu mulai dari halaman 1.
-  useEffect(() => {
-    setPage(1);
-  }, [query]);
+  // Filter baris sesuai scope
+  const rows: RecapRow[] = (() => {
+    if (!recap) return [];
+    if (scope === "mine") {
+      const numericId = Number(employeeId);
+      if (Number.isNaN(numericId)) return []; // HR id (mis. "hr-1") tidak punya baris rekap
+      return recap.rekap.filter((row) => row.karyawan_id === numericId);
+    }
+    return recap.rekap;
+  })();
 
-  const filtered = useMemo(() => {
-    const rows = scope === "mine"
-      ? (summary?.rows ?? []).filter((row) => row.employeeId === employeeId)
-      : summary?.rows ?? [];
-    const keyword = query.trim().toLowerCase();
-    if (!keyword) return rows;
-    return rows.filter(
-      (row) => row.name.toLowerCase().includes(keyword) || row.division.toLowerCase().includes(keyword),
-    );
-  }, [summary, query, scope, employeeId]);
+  const ringkasan = recap?.ringkasan;
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  const columns: Column<MonthlySummaryRow>[] = [
-    { key: "name", header: "Karyawan", render: (row) => <span className="whitespace-nowrap">{row.name}</span> },
-    { key: "division", header: "Divisi", render: (row) => <span className="whitespace-nowrap">{row.division}</span> },
-    { key: "present", header: "Hadir", align: "right", render: (row) => num(row.present) },
-    { key: "late", header: "Terlambat", align: "right", render: (row) => num(row.late) },
-    { key: "izin", header: "Izin", align: "right", render: (row) => num(row.izin) },
-    { key: "sakit", header: "Sakit", align: "right", render: (row) => num(row.sakit) },
-    { key: "cuti", header: "Cuti", align: "right", render: (row) => num(row.cuti) },
-    { key: "alpa", header: "Alpa", align: "right", render: (row) => num(row.alpa) },
-    {
-      key: "total",
-      header: "Total hari kerja",
-      align: "right",
-      render: (row) => num(row.totalWorkDays),
-    },
+  const columns: Column<RecapRow>[] = [
+    { key: "karyawan_id", header: "Karyawan ID", align: "right", render: (row) => <span className="tabular-nums">{row.karyawan_id}</span> },
+    { key: "hadir", header: "Hadir", align: "right", render: (row) => <span className="tabular-nums">{row.hadir}</span> },
+    { key: "terlambat", header: "Terlambat", align: "right", render: (row) => <span className="tabular-nums">{row.terlambat}</span> },
+    { key: "izin_sakit", header: "Izin / Sakit", align: "right", render: (row) => <span className="tabular-nums">{row.izin_sakit}</span> },
+    { key: "cuti", header: "Cuti", align: "right", render: (row) => <span className="tabular-nums">{row.cuti}</span> },
+    { key: "alpa", header: "Alpa", align: "right", render: (row) => <span className="tabular-nums">{row.alpa}</span> },
   ];
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        breadcrumb={
-          scope === "team"
-            ? [{ label: "Kehadiran", href: homeFor("admin_hr") }, { label: "Rekap" }]
-            : [{ label: "Kehadiran", href: homeFor("karyawan") }, { label: "Rekap saya" }]
-        }
-        title={scope === "team" ? "Rekap kehadiran bulanan" : "Riwayat rekap saya"}
+        breadcrumb={[{ label: "Kehadiran" }, { label: "Rekap kehadiran" }]}
+        title="Rekap Kehadiran"
       />
 
-      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
-        <FormField id="bulan" label="Bulan">
-          <Select
-            value={month}
-            onChange={(event) => {
-              setMonth(event.target.value || currentMonth());
-              setPage(1);
-            }}
-          >
-            {monthOptions().map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </FormField>
+      {/* Picker bulan & tahun */}
+      <Card className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-end gap-4">
+          <FormField id="rekap-bulan" label="Bulan">
+            <Select
+              id="rekap-bulan"
+              value={bulan}
+              onChange={(event) => setBulan(Number(event.target.value))}
+            >
+              {BULAN_LABEL.map((label, index) => (
+                <option key={label} value={index + 1}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+
+          <FormField id="rekap-tahun" label="Tahun">
+            <Select
+              id="rekap-tahun"
+              value={tahun}
+              onChange={(event) => setTahun(Number(event.target.value))}
+            >
+              {TAHUN_LIST.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+        </div>
       </Card>
 
-      {/* M13-US4: cuti dihitung dari cuti disetujui milik M12, bukan dari input manual. */}
-      <p className="text-caption text-muted">
-        {formatMonthLabel(month)} · {leave.length} hari cuti berstatus disetujui dari modul M12 ikut dihitung sebagai
-        cuti{leave.length > 0 ? ` (${leave.slice(0, 3).map((item) => formatDate(item.date)).join(", ")}${leave.length > 3 ? ", …" : ""})` : ""}.
-      </p>
+      {error ? <Banner variant="danger" message={error} /> : null}
 
-      {!error && summary && !summary.hasData ? (
-        <Banner variant="info" message="Belum ada data kehadiran pada bulan ini." />
-      ) : null}
-
+      {/* Tabel rekap */}
       <Table
-        caption={`Rekap kehadiran ${formatMonthLabel(month)}`}
+        caption={`Rekap ${formatMonthLabel(`${tahun}-${String(bulan).padStart(2, "0")}`)}`}
         columns={columns}
-        rows={pageRows}
-        rowKey={(row) => row.employeeId}
+        rows={rows}
+        rowKey={(row) => String(row.karyawan_id)}
         loading={loading}
-        error={error}
-        onRetry={() => void load(month)}
         empty={
-          <p>
-            {scope === "mine"
-              ? "Belum ada data rekap bulan ini."
-              : "Tidak ada karyawan yang cocok dengan pencarian."}
-          </p>
-        }
-        footer={
-          <Pagination
-            total={filtered.length}
-            page={currentPage}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setPage(1);
-            }}
-          />
+          scope === "mine" ? (
+            <p className="text-body text-muted">Belum ada data rekap untuk bulan ini.</p>
+          ) : (
+            <p className="text-body text-muted">Belum ada data rekap untuk periode ini.</p>
+          )
         }
       />
+
+      {/* Ringkasan total — hanya HR */}
+      {scope === "team" && ringkasan && Object.keys(ringkasan).length > 0 ? (
+        <Card className="p-5 sm:p-6">
+          <h2 className="text-h3 text-text">Ringkasan total</h2>
+          <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+            {Object.entries(ringkasan).map(([key, value]) => (
+              <div key={key} className="flex items-center justify-between">
+                <span className="text-body text-muted">{key}</span>
+                <span className="text-body text-text tabular-nums">{value}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }

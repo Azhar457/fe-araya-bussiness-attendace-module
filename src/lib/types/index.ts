@@ -14,6 +14,82 @@ export type Session = {
   role: Role;
 };
 
+/** Sesi identitas untuk mode BE asli: id numerik (header X-Employee-Id) + peran + label. */
+export type LiveSession = {
+  employeeId: string; // numerik, dikirim sebagai header X-Employee-Id
+  name: string;
+  role: Role;
+};
+/* ================================================================== */
+/* Bentuk wire BE LIVE (laboratorium-backend.vercel.app)               */
+/* ================================================================== */
+
+/** GET /api/attendance/today → attendance */
+export type LiveTodayAttendance = {
+  id: number;
+  employeeId: number;
+  date: string; // "2026-10-24"
+  checkInAt: string | null; // ISO +07:00
+  checkOutAt: string | null;
+  status: "hadir" | "terlambat" | "izin" | "sakit" | "cuti" | "alpa" | null;
+  isLate: boolean;
+  lateMinutes: number;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+/** GET /api/attendance/today */
+export type LiveToday = {
+  date: string;
+  isWorkday: boolean;
+  hasCheckedIn: boolean;
+  hasCheckedOut: boolean;
+  attendance: LiveTodayAttendance | null;
+};
+
+/** POST /api/attendance/check-in → 201 */
+export type LiveCheckInResult = {
+  message: string;
+  data: { tanggal: string; jam: string; status: string };
+};
+
+/** GET /api/attendance/recap */
+export type LiveRecap = {
+  success: boolean;
+  message?: string;
+  data: {
+    periode: { bulan: number; tahun: number };
+    rekap: Array<{
+      karyawan_id: number;
+      hadir: number;
+      terlambat: number;
+      izin_sakit: number;
+      cuti: number;
+      alpa: number;
+    }>;
+    ringkasan?: Record<string, number>;
+  };
+};
+
+/** POST /api/working-hours → 200 */
+export type LiveWorkingHoursResult = { message: string };
+
+/** POST /api/leave-permissions → 201/200 */
+export type LiveLeaveResult = { message: string; data?: unknown };
+
+/** GET /api/leave-permissions → { success, data: [] } */
+export type LiveLeaveList = {
+  success: boolean;
+  data: Array<{
+    id?: number;
+    tanggal: string;
+    jenis: string;
+    alasan: string;
+    status?: string;
+    karyawan_id?: number;
+  }>;
+};
+
 /** Akun untuk halaman masuk. Hanya ada di mode mock sampai BE menetapkan SSO/token. */
 export type Account = {
   id: string;
@@ -57,6 +133,8 @@ export type AbsenceRequestWithMeta = AbsenceRequest & {
 };
 
 export type AttendanceHistoryRow = {
+  employeeId?: string;
+  employeeName?: string;
   tanggal: string; // "YYYY-MM-DD" atau "—" bila slot kosong
   jam_check_in: string | null; // "HH:MM"
   jam_check_out: string | null; // "HH:MM"
@@ -87,11 +165,82 @@ export type MonthlySummary = {
   month: string; // "2026-10"
   hasData: boolean;
   rows: MonthlySummaryRow[];
+  meta?: RecapMeta;
 };
 
 export type ApprovedLeave = {
   employeeId: string;
   date: string; // YYYY-MM-DD
+};
+
+/* ── ERD M13 v2 (SYSTEM ANALYST) ───────────────────────────────────── */
+
+/** ref M12 — daftar jabatan. Di BE asli datang dari tabel positions. */
+export type Position = {
+  id: string;
+  name: string; // "EMPLOYEE" | "HR" (mock memakai label yang mudah dibaca)
+};
+
+/** 1 = Senin … 7 = Minggu (ISO-8601). */
+export type WorkDay = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/**
+ * working_hours: satu aturan per jabatan per tanggal berlaku.
+ * UNIQUE(position_id, effective_from); versi lama ditutup otomatis (effectiveTo).
+ */
+export type WorkRule = {
+  id: string;
+  positionId: string;
+  positionName: string;
+  workStart: string; // "08:00"
+  workEnd: string; // "17:00"
+  lateToleranceMinutes: number; // 0–15
+  workDays: WorkDay[];
+  effectiveFrom: string; // YYYY-MM-DD
+  effectiveTo: string | null; // null = masih berlaku
+  createdAt: string; // ISO
+  createdBy: string;
+};
+
+export type WorkRuleInput = {
+  positionId: string;
+  workStart: string;
+  workEnd: string;
+  lateToleranceMinutes: number;
+  workDays: WorkDay[];
+  effectiveFrom: string;
+};
+
+export type HolidayType = "NATIONAL" | "JOINT_LEAVE" | "CUSTOM";
+
+export type Holiday = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  type: HolidayType;
+  createdBy: string;
+};
+
+export type HolidayInput = {
+  date: string;
+  name: string;
+  type: HolidayType;
+};
+
+/** Status siklus rekap bulanan (US5: generate → kunci → kirim M14). */
+export type RecapMeta = {
+  month: string;
+  generatedAt: string | null;
+  lockedAt: string | null;
+  sentAt: string | null;
+};
+
+export type RecapExport = {
+  id: string;
+  month: string;
+  sentAt: string;
+  sentBy: string;
+  rowCount: number;
 };
 
 export type ApiErrorBody = {

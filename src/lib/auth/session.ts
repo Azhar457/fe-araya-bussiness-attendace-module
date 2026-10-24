@@ -1,29 +1,29 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
 import { EMPLOYEE_COOKIE, homeFor } from "@/lib/auth/constants";
-import { EMPLOYEES } from "@/mocks/store";
-import type { Role, Session } from "@/lib/types";
+import type { LiveSession, Role } from "@/lib/types";
 
-/** Sesi dibaca dari cookie akun. Di BE asli diganti validasi token/SSO. */
-export async function getSession(): Promise<Session> {
+// Peta id cookie → label identitas demo (BE live tidak punya /api/me).
+const IDENTITIES: Array<{ id: string; name: string; role: Role }> = [
+  { id: "101", name: "Dimas Pratama", role: "karyawan" },
+  { id: "102", name: "Sinta Maharani", role: "karyawan" },
+  { id: "hr-1", name: "Rani Kusumawati", role: "admin_hr" },
+];
+
+export async function getSession(): Promise<LiveSession> {
   const jar = await cookies();
-  const id = jar.get(EMPLOYEE_COOKIE)?.value;
-  // Fallback EMPLOYEES[0] hanya untuk route mock yang diuji tanpa sesi; halaman
-  // tetap dijaga requireSession.
-  const employee = EMPLOYEES.find((item) => item.id === id) ?? EMPLOYEES[0];
-  return { id: employee.id, name: employee.name, role: employee.role };
+  const id = jar.get(EMPLOYEE_COOKIE)?.value ?? "";
+  const found = IDENTITIES.find((item) => item.id === id) ?? { id, name: `Karyawan #${id || "?"}`, role: "karyawan" as Role };
+  return { employeeId: found.id, name: found.name, role: found.role };
 }
 
-/** Guard halaman: belum masuk → halaman masuk. */
-export async function requireSession(): Promise<Session> {
+export async function requireSession(): Promise<LiveSession> {
   const jar = await cookies();
   if (!jar.get(EMPLOYEE_COOKIE)?.value) redirect("/masuk");
   return getSession();
 }
 
-/** Guard route: peran yang tidak berhak dilempar ke halaman miliknya. */
-export async function requireRole(role: Role): Promise<Session> {
+export async function requireRole(role: Role): Promise<LiveSession> {
   const session = await requireSession();
   if (session.role !== role) redirect(homeFor(session.role));
   return session;

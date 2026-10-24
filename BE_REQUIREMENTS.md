@@ -1,3 +1,5 @@
+> **Status 24 Okt 2026:** FE sudah terhubung ke BE live (`laboratorium-backend.vercel.app`) untuk endpoint yang sudah ada. `POST /api/auth/login` masih menunggu BE. Dokumen di bawah ini (requirement endpoint lama) sebagian besar sudah digantikan kontrak live BE.
+
 # Requirements FE → BE (Modul M13 Kehadiran)
 
 > **Untuk**: Ikmal (Backend) & Dera (System Analyst)

@@ -1,29 +1,13 @@
 import type { ApiErrorBody } from "@/lib/types";
 import { EMPLOYEE_COOKIE } from "@/lib/auth/constants";
-import type { GeoCapture } from "@/lib/geo";
-
-/** true = pakai route handler mock, false = pakai BE asli (NEXT_PUBLIC_API_BASE_URL). */
-export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== "false";
 
 /**
- * URL basis BE — 100% dari env (NEXT_PUBLIC_API_BASE_URL), tanpa hardcoded fallback.
- * Tidak ada nilai default: jika env belum diisi, fetch akan gagal dengan pesan jelas.
+ * API client — mode BE asli (laboratorium-backend.vercel.app).
+ * URL 100% dari env NEXT_PUBLIC_API_BASE_URL; tanpa hardcoded fallback.
  */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 
-const MOCK_PREFIX = "/api/mock";
-
-/**
- * Pemetaan path kontrak BE → route mock, hanya untuk yang namanya berbeda.
- * Path berprefix "/api/" otomatis dipotong prefix-nya saat mode mock,
- * jadi "/api/attendance/today" → "/api/mock/attendance/today".
- */
-const MOCK_PATH_ALIASES: Record<string, string> = {
-  "/api/working-hours": "/attendance/work-settings",
-  "/api/leave-permissions": "/attendance/absence-requests",
-};
-
-/** Baca id karyawan dari cookie sesi (dipakai untuk header X-Employee-Id di BE mode). */
+/** Baca id karyawan numerik dari cookie sesi (di-set halaman /masuk). */
 function readEmployeeCookie(): string {
   if (typeof document === "undefined") return "";
   const match = document.cookie
@@ -48,52 +32,31 @@ export class ApiError extends Error {
 
 /** path selalu memakai bentuk kontrak BE (mis. "/api/attendance/today"). */
 export function apiUrl(path: string): string {
-  if (!USE_MOCK) return `${API_BASE}${path}`;
   const qIndex = path.indexOf("?");
   const rawPath = qIndex === -1 ? path : path.slice(0, qIndex);
   const search = qIndex === -1 ? "" : path.slice(qIndex);
-  const mapped =
-    MOCK_PATH_ALIASES[rawPath] ??
-    (rawPath.startsWith("/api/") ? rawPath.slice(4) : rawPath);
-  return `${MOCK_PREFIX}${mapped}${search}`;
+  return `${API_BASE}${rawPath}${search}`;
 }
 
 export async function request<T>(
   path: string,
-  init?: RequestInit & { geo?: GeoCapture },
+  init?: RequestInit,
 ): Promise<T> {
   let response: Response;
   try {
-    const geo = init?.geo;
     const employeeId = readEmployeeCookie();
     const headerInit = init?.headers
-      ? Object.fromEntries(
-          new Headers(init.headers).entries(),
-        )
+      ? Object.fromEntries(new Headers(init.headers).entries())
       : {};
     const headers: Record<string, string> = {
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...headerInit,
     };
     if (employeeId) headers["X-Employee-Id"] = employeeId;
-    let body = init?.body;
-    if (geo && body) {
-      const parsed: Record<string, unknown> =
-        typeof body === "string" ? JSON.parse(body) : { ...(body as object) };
-      body = JSON.stringify({
-        ...parsed,
-        latitude: geo.latitude,
-        longitude: geo.longitude,
-        accuracy_m: Math.round(geo.accuracyMeters),
-        geo_timestamp: new Date(geo.timestampMs).toISOString(),
-        spoof_suspect: geo.spoof.suspect,
-        spoof_reasons: geo.spoof.reasons,
-      });
-    }
     response = await fetch(apiUrl(path), {
       ...init,
       headers,
-      body,
+      body: init?.body,
       cache: "no-store",
     });
   } catch {
@@ -104,22 +67,42 @@ export async function request<T>(
 
   const body = (await response.json().catch(() => null)) as
     | (ApiErrorBody & { fields?: Record<string, string> })
-    | { error?: string; details?: string }
+    | { error?: string; details?: string; message?: string }
     | null;
 
   if (!response.ok) {
-    // BE asli bentuk error: { error: "pesan" }; mock bentuk: { code, message, fields }
-    const errorMessage =
-      "message" in (body ?? {}) ? (body as { message: string }).message
-      : "error" in (body ?? {}) ? (body as { error: string }).error
-      : "Permintaan gagal diproses. Coba lagi.";
-    const fields = "fields" in (body ?? {}) ? (body as { fields?: Record<string, string> }).fields : undefined;
-    throw new ApiError(
-      response.status,
-      "code" in (body ?? {}) ? (body as { code: string }).code : "BE_ERROR",
-      errorMessage,
-      fields,
-    );
+    // BE live bentuk error: { error: "pesan" } atau { error: { code, message } }
+    let errorMessage: string;
+    let errorFields: Record<string, string> | undefined;
+    let errorCode: string;
+
+    const err = body as unknown as {
+      error?: string | { code?: string; message?: string; fields?: Record<string, string> };
+      details?: string;
+      message?: string;
+      code?: string;
+      fields?: Record<string, string>;
+    } | null;
+
+    if (err?.error && typeof err.error === "object") {
+      // bentuk { error: { code, message, fields } }
+      errorCode = err.error.code ?? "BE_ERROR";
+      errorMessage = err.error.message ?? "Permintaan gagal diproses. Coba lagi.";
+      errorFields = err.error.fields;
+    } else if (typeof err?.error === "string") {
+      // bentuk { error: "pesan", details?: "..." }
+      errorCode = "BE_ERROR";
+      errorMessage = err.error;
+    } else if (err?.message) {
+      errorCode = err.code ?? "BE_ERROR";
+      errorMessage = err.message;
+      errorFields = err.fields;
+    } else {
+      errorCode = "BE_ERROR";
+      errorMessage = "Permintaan gagal diproses. Coba lagi.";
+    }
+
+    throw new ApiError(response.status, errorCode, errorMessage, errorFields);
   }
 
   return body as T;

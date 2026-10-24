@@ -1,12 +1,18 @@
 # FE Modul M13 — Kehadiran (Araya Business Hub Platform)
 
 Frontend **Modul Kehadiran (M13, Kel. C4)** — Next.js App Router + TypeScript + Tailwind (token CSS).
-Berisi UI + mock API lengkap untuk **M13-US1 s.d. M13-US5**, siap disambungkan ke BE.
+UI terhubung **langsung ke BE live** (`laboratorium-backend.vercel.app`). Data presensi, rekap, dan izin
+datang dari endpoint BE nyata; fitur yang belum punya endpoint di BE menampilkan empty-state.
 
-> **Kontrak API di dokumen ini masih ASUMSI FE dan BELUM FINAL.**
-> Bagian [§5](#5-kontrak-api--daftar-endpoint-yang-dibutuhkan-be) adalah perjanjian kerja FE ↔ BE.
-> Kalau SA/BE mengubah apa pun, **jangan sentuh komponen halaman** — ikuti [§6 Titik revisi kontrak](#6-titik-revisi-kontrak--satu-perubahan-satu-file).
-> Sumber kebenaran desain: `Panduan_UI_Capstone_Project_05_Oktober.pdf` v1.0 → `design.md` → `PRD.md`.
+Relasi dokumen:
+
+- `SYSTEM_ANALYST_M13_v3.xlsx` — SA v3 (kontrak E01–E27; sebagian belum di-deploy di BE)
+- `Sprint_Plan_M13_Presensi.xlsx` — rencana & status sprint
+- `Panduan_UI_Capstone_Project_05_Oktober.pdf` v1.0 → `stitch_employee_hr_portal_redesign/` (referensi desain)
+
+> **FE tidak lagi punya mode mock.** Semua route handler mock (`src/app/api/mock/**`) dan
+> `src/mocks/` sudah dihapus. `client.ts` selalu menembak `NEXT_PUBLIC_API_BASE_URL` dan
+> mengirim cookie sesi (`araya_employee`) sebagai header `X-Employee-Id`.
 
 ---
 
@@ -14,16 +20,16 @@ Berisi UI + mock API lengkap untuk **M13-US1 s.d. M13-US5**, siap disambungkan k
 
 | US | Halaman | Route | Role | Status FE |
 |---|---|---|---|---|
-| M13-US1 | Pengaturan jam kerja | `/kehadiran/pengaturan` | `admin_hr` | **selesai** (mock) |
-| M13-US2 | Kehadiran hari ini | `/kehadiran/hari-ini` | `karyawan` | **selesai** (mock) |
-| M13-US3 | Ajukan izin/sakit | `/kehadiran/izin` | `karyawan` | **selesai** (mock) |
-| M13-US3 | Riwayat pengajuan | `/kehadiran/izin/riwayat` | `karyawan` | **selesai** (mock) |
-| M13-US5 | Rekap kehadiran bulanan | `/kehadiran/rekap` | `admin_hr` | **selesai** (mock) |
-| M13-US4 | Status `cuti` (kontrak M12) | muncul di rekap | sistem | **selesai di mock**, menunggu kontrak cuti final M12 |
-| — | Masuk (pilih akun) | `/masuk` | semua | **selesai** — simulasi FE, hanya ada di mode mock ([§7](#7-mock-cara-kerja--batasnya)) |
+| M13-US1 | Pengaturan jam kerja (POST global) | `/kehadiran/pengaturan` | `admin_hr` | **live** — `POST /api/working-hours` |
+| M13-US2 | Kehadiran hari ini + presensi | `/kehadiran/hari-ini` | `karyawan` | **live** — `GET /api/attendance/today`, `POST check-in/check-out` |
+| M13-US2 | Riwayat kehadiran | `/kehadiran/riwayat` | semua | empty-state (BE belum punya endpoint riwayat harian) + kartu hari ini |
+| M13-US3 | Ajukan izin/sakit | `/kehadiran/izin` | `karyawan` | **live** — `GET/POST /api/leave-permissions` |
+| M13-US3 | Riwayat pengajuan | `/kehadiran/izin/riwayat` | `karyawan` | **live** — `GET /api/leave-permissions` |
+| M13-US3 | Persetujuan izin/sakit | `/kehadiran/approval` | `admin_hr` | empty-state (BE belum punya endpoint review) |
+| M13-US5 | Rekap bulanan | `/kehadiran/rekap` | `admin_hr` / `karyawan` | **live** — `GET /api/attendance/recap?bulan=&tahun=` |
+| — | Masuk (login) | `/masuk` | semua | **placeholder** — menunggu endpoint login dari BE (`POST /api/auth/login`); belum ada mock akun demo |
 
 Build: `npm run build` **hijau** (Next 15.5, React 19, TypeScript strict).
-Uji kontrak mock: 16/16 skenario AC lulus (lihat [§8.2](#82-cek-otomatis-yang-sudah-dijalankan)).
 
 ---
 
@@ -35,20 +41,20 @@ cp .env.example .env.local
 npm run dev          # http://localhost:3000
 ```
 
-Node 20+. Bisa juga `pnpm`/`yarn`, tapi contoh di dokumen ini memakai `npm`.
+Node 20+.
 
 ### Environment
 
 ```env
-# true  = pakai route handler mock internal (src/app/api/mock/**)
-# false = pakai BE asli (isi NEXT_PUBLIC_API_BASE_URL)
-NEXT_PUBLIC_USE_MOCK=true
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+NEXT_PUBLIC_USE_MOCK=false
+NEXT_PUBLIC_API_BASE_URL=https://laboratorium-backend.vercel.app
 ```
 
-- `NEXT_PUBLIC_USE_MOCK=false` → `src/lib/api/client.ts` langsung menembak `NEXT_PUBLIC_API_BASE_URL`. **Tidak ada komponen yang perlu diubah.**
-- Sesi disimpan di cookie `araya_employee` ([§7](#7-mock-cara-kerja--batasnya)). Belum ada cookie → otomatis dialihkan ke `/masuk`. Untuk ganti peran saat demo: **Keluar** dari menu akun di navbar, lalu masuk dengan akun lain.
-- Reset data mock: `curl -X POST http://localhost:3000/api/mock/reset`.
+- `NEXT_PUBLIC_USE_MOCK` sudah tidak dibaca kode (mock dihapus); dibiarkan `false` eksplisit.
+- `client.ts` selalu menembak `NEXT_PUBLIC_API_BASE_URL` dan mengirim cookie sesi
+  (`araya_employee`) sebagai header `X-Employee-Id` — BE autentikasi per endpoint, bukan token.
+- Belum ada cookie → dialihkan ke `/masuk`. Ganti peran: **Keluar** dari menu akun, masuk identitas lain.
+- Tidak ada reset data mock (data hidup di DB Neon milik BE).
 
 ---
 
@@ -57,33 +63,29 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ```
 src/
   app/
-    layout.tsx                    # html/body, font, import token
-    page.tsx                      # / → arahkan sesuai role
-    masuk/page.tsx                # halaman masuk (di luar kerangka navbar)
-    (app)/layout.tsx              # AppShell + session
     (app)/kehadiran/
-      pengaturan/page.tsx         # US1
-      hari-ini/page.tsx           # US2
+      pengaturan/page.tsx         # US1 — aturan per jabatan + hari libur
+      hari-ini/page.tsx           # US2 — check-in/out + GPS
+      riwayat/page.tsx            # US2/US4 — riwayat kehadiran (E11)
       izin/page.tsx               # US3 — form pengajuan
       izin/riwayat/page.tsx       # US3 — riwayat pengajuan
-      rekap/page.tsx              # US5 (+US4)
-    api/mock/**                   # mock BE (route handler) — lihat §7
-    globals.css
+      approval/page.tsx           # US3 — persetujuan HR (E15)
+      rekap/page.tsx              # US5 (+US4) — rekap & siklus M14
+    api/mock/**                   # mock BE, path = kontrak SA (§7)
   components/
-    ui/            # Button, Badge, FormField/Input/Select/Textarea/RadioGroup,
-                   # Table, Pagination, Toast, Dialog, Banner, Skeleton, Card,
-                   # PageHeader, Icons
-    layout/        # AppShell, Navbar, AccountMenu, Sidebar, nav-items, search-context
-    auth/          # LoginPage
-    kehadiran/     # WorkSettingsForm, TodayCard, AbsenceFormPage,
-                   # AbsenceHistoryPage, MonthlySummaryPage
+    kehadiran/
+      WorkSettingsForm.tsx        # US1
+      AttendanceHistoryPage.tsx   # E11
+      RecapWorkflow.tsx           # E19–E22 (hitung/kunci/kirim + log)
+      MonthlySummaryPage.tsx      # US5/US4
+      AbsenceFormPage.tsx / AbsenceHistoryPage.tsx / ApprovalPage.tsx
+      PresensiCTA.tsx, TerminalPresensiHariIni.tsx, TodayCard.tsx, …  # dashboard US2
+    ui/ layout/ auth/
   lib/
-    api/           # client.ts (mock-aware) + kehadiran.ts + auth.ts (satu fungsi = satu endpoint)
-    auth/          # constants.ts (pure) + session.ts (server: cookie & guard)
-    format/        # formatDate, formatDateTime, formatTime, formatNumber, …
-    types/         # tipe domain = bentuk kontrak
-    validation/    # aturan validasi (dipakai form DAN route handler mock)
-  mocks/store.ts   # seed + store in-memory
+    api/          # client.ts (mock-aware) + kehadiran.ts (satu fungsi = satu endpoint)
+    auth/         # constants.ts + session.ts (cookie & guard, server)
+    format/ types/ validation/
+  mocks/store.ts  # seed + store in-memory (ERD v2)
   styles/tokens.css
 ```
 
@@ -91,69 +93,82 @@ src/
 
 ## 4. Aturan yang berlaku di UI
 
-- Warna **hanya** dari token (`src/styles/tokens.css`). Tidak ada hex di `src/` (diverifikasi dengan grep).
-- Skala `spacing` dan `fontSize` Tailwind **di-override** di `tailwind.config.ts` → nilai di luar panduan (mis. `p-9`, `text-xl`) tidak bisa dipakai.
-- Font: Plus Jakarta Sans (judul, via aturan `h1,h2,h3`) + Source Sans 3 (isi) dari Google Fonts `<link>`; fallback sistem.
+- Warna **hanya** dari token (`src/styles/tokens.css`). Tidak ada hex di `src/`.
+- Skala `spacing` dan `fontSize` Tailwind **di-override** di `tailwind.config.ts`.
+- Font: Plus Jakarta Sans (judul) + Source Sans 3 (isi) dari Google Fonts.
 - Angka tabel: `tabular-nums` + rata kanan (`<Table>` mengurus ini).
-- Badge = titik + kata, tidak bisa diklik, satu badge per baris.
+- Badge = titik + kata, satu badge per baris.
 - **Satu tombol utama per layar**, "Batal" di kiri aksi utama.
-- Tombol form berada **di dalam kartu form**, dipisah garis `border-line` (Panduan UI 3 · Form).
-- Kerangka: navbar 56px (logo + nama aplikasi kiri, **pencarian tengah**, akun kanan), sidebar 240px, konten maksimal 1280px rata tengah, padding 24px (16px di bawah 640px).
-- Kolom cari navbar **berfungsi**: menyaring daftar di halaman yang sedang dibuka (Rekap, Riwayat pengajuan). Halaman tanpa daftar tidak menampilkan kolom itu supaya tidak ada kontrol mati.
-- Satu-satunya layar tanpa navbar: `/masuk` (Panduan UI 4 · Struktur halaman).
-- **Mode gelap tidak dipakai.** Nilai gelap Lampiran PDF v1.0 tetap ada apa adanya di `tokens.css` sebagai `:root[data-theme="dark"]`; aktifkan dengan memasang `data-theme="dark"` pada `<html>`. Bawaannya terang karena PRD M13 tidak meminta mode gelap.
-- Loading = skeleton; error = banner merah + "Coba lagi"; empty = satu kalimat + satu aksi.
-- Toast: sukses/info hilang sendiri 5 detik, galat tetap sampai ditutup.
-- Footer tabel: jumlah data di kiri, nomor halaman + ukuran halaman (10/25/50) di kanan; kontrol halaman disembunyikan bila hasilnya hanya satu halaman.
-- Responsif: ≥1024px sidebar tetap, <1024px sidebar jadi laci, <640px satu kolom. Tabel bergulir **di dalam kartu** (satu-satunya area `overflow-x`), halaman tidak bergulir ke samping di 400px.
+- Loading = skeleton; error = banner + "Coba lagi"; empty = satu kalimat + satu aksi.
+- Responsif: ≥1024px sidebar tetap, <1024px laci, <640px satu kolom.
+  Tabel bergulir **di dalam kartu**; halaman tidak bergulir ke samping di 400px (diverifikasi).
+- **Mode gelap tidak dipakai.** Nilai gelap Lampiran PDF tetap ada di `tokens.css`
+  sebagai `:root[data-theme="dark"]`, aktif hanya bila atribut itu dipasang manual.
 
 ---
 
-## 5. Kontrak API — daftar endpoint yang dibutuhkan BE
+## 5. Kontrak API — mengikuti SA (E01–E23)
 
-Semua path di bawah **relatif**. Saat mock, FE menambahkan prefix `/api/mock`; saat BE asli, FE memakai `NEXT_PUBLIC_API_BASE_URL` + path yang sama.
-Artinya: **BE cukup menyediakan path di kolom "Path"**, tanpa prefix `/api/mock`.
+Semua path **relatif**. Saat mock, FE memetakan `/api/...` → `/api/mock/...`;
+saat BE asli, FE memakai `NEXT_PUBLIC_API_BASE_URL` + path yang sama.
+**BE cukup menyediakan path di kolom "Path", tanpa prefix `/api/mock`.**
 
-### 5.0 Checklist endpoint — ini yang harus disediakan BE
+### 5.1 Status implementasi per endpoint
 
-| # | Method | Path | Dipakai oleh | Role pemanggil | Fungsi | Prioritas |
-|---|---|---|---|---|---|---|
-| 1 | `GET` | `/me` | semua halaman | semua | identitas + role pengguna | wajib |
-| 2 | `GET` | `/attendance/work-settings` | US1, **US2** | `admin_hr` (US1), `karyawan` (US2) | baca aturan jam kerja | wajib |
-| 3 | `PUT` | `/attendance/work-settings` | US1 | `admin_hr` | simpan aturan jam kerja | wajib |
-| 4 | `GET` | `/attendance/today` | US2 | `karyawan` | kehadiran hari ini | wajib |
-| 5 | `POST` | `/attendance/check-in` | US2 | `karyawan` | catat jam masuk + tentukan terlambat | wajib |
-| 6 | `POST` | `/attendance/check-out` | US2 | `karyawan` | catat jam pulang | wajib |
-| 7 | `GET` | `/attendance/absence-requests` | US3 | `karyawan` | riwayat pengajuan milik sendiri | wajib |
-| 8 | `POST` | `/attendance/absence-requests` | US3 | `karyawan` | kirim pengajuan izin/sakit | wajib |
-| 9 | `DELETE` | `/attendance/absence-requests/{id}` | US3 | `karyawan` | batalkan pengajuan `pending` | ⚠️ interpretasi FE, perlu konfirmasi |
-| 10 | `GET` | `/attendance/monthly-summary?month=YYYY-MM` | US5, US4 | `admin_hr` | rekap bulanan per karyawan | wajib |
-| 11 | `GET` | `/leave/approved?from=&to=` | US4 | sistem / `admin_hr` | tanggal cuti **disetujui** (kontrak M12) | ⚠️ bentuk belum final |
-| 12 | `POST` | *(belum ada)* | US5 | — | kirim rekap ke M14 (penggajian) | ⚠️ belum ada kontrak |
+| ID | Method | Path | Role | Dipakai FE | Status di BE (per SA) |
+|---|---|---|---|---|---|
+| E01 | `POST` | `/api/working-hours` | `admin_hr` | ✅ US1 | belum (usulan) |
+| E02 | `GET` | `/api/working-hours` | `admin_hr` | ✅ US1 (riwayat versi) | belum |
+| E03 | `GET` | `/api/working-hours/active` | semua | ✅ US1/US2 (aturan jabatan sendiri) | belum |
+| E04 | `GET` | `/api/working-hours/{id}` | `admin_hr` | ✅ tersedia di mock, belum dipakai UI | belum |
+| E05 | `POST` | `/api/holidays` | `admin_hr` | ✅ US1 | belum |
+| E06 | `GET` | `/api/holidays` | semua | ✅ US1 | belum |
+| E07 | `DELETE` | `/api/holidays/{id}` | `admin_hr` | ✅ US1 | belum |
+| E08 | `POST` | `/api/attendance/check-in` | `karyawan` | ✅ US2 | **ada di Swagger** |
+| E09 | `POST` | `/api/attendance/check-out` | `karyawan` | ✅ US2 | **ada di Swagger** |
+| E10 | `GET` | `/api/attendance/today` | semua | ✅ US2 | **ada di Swagger** |
+| E11 | `GET` | `/api/attendance?month=YYYY-MM` | HR semua / karyawan sendiri | ✅ `/kehadiran/riwayat` + export CSV | belum |
+| E12 | `GET` | `/api/attendance-statuses` | semua | ❌ tidak dipakai (6 status baku di FE) | usulan |
+| E13 | `POST` | `/api/absence-requests` | `karyawan` | ✅ US3 (satu tanggal) | belum |
+| E14 | `GET` | `/api/absence-requests?status=` | HR semua / karyawan sendiri | ✅ US3 | belum |
+| E15 | `PATCH` | `/api/absence-requests/{id}/review` | `admin_hr` | ✅ persetujuan | belum |
+| E16 | `GET` | `/api/leaves?status=APPROVED&from=&to=` | sistem/HR | ✅ US4 (kontrak M12) | **kontrak M12** |
+| E17 | `POST` | `/api/attendance/sync-leaves` | sistem/HR | ❌ belum dipakai | usulan |
+| E18 | `GET` | `/api/recaps?month=YYYY-MM` | HR semua / karyawan sendiri | ✅ US5 | belum |
+| E19 | `POST` | `/api/recaps/generate` | `admin_hr` | ✅ US5 | belum |
+| E20 | `POST` | `/api/recaps/lock` | `admin_hr` | ✅ US5 | belum |
+| E21 | `POST` | `/api/recaps/send-to-m14` | `admin_hr` | ✅ US5 | belum |
+| E22 | `GET` | `/api/recap-exports` | `admin_hr` | ✅ log pengiriman | belum |
+| E23 | `GET` | `/api/audit-logs` | `admin_hr` | ❌ tidak dipakai (`Usulan` di SA) | usulan |
+| — | `GET` | `/me` | semua | ✅ identitas + role | belum jelas (auth) |
+| — | `GET` | `/api/positions` | semua | ✅ **mock-only** (ref M12) | digantikan M12 |
 
-Catatan penting:
+Catatan:
 
-- **#2 dipanggil karyawan juga.** Halaman US2 butuh `workStart`, `workEnd`, `lateToleranceMinutes` untuk menampilkan "08:00–17:00 · Toleransi 15 menit". Kalau BE membatasi endpoint ini hanya untuk `admin_hr`, karyawan akan gagal memuat → mohon izinkan `karyawan` untuk `GET`, batasi hanya `PUT` untuk `admin_hr`.
-- **#11 adalah satu-satunya titik integrasi M12 → M13.** Kalau M12 sudah punya endpoint sendiri (mis. `GET /leave/requests?status=approved`), FE cukup menyesuaikan satu fungsi ([§6](#6-titik-revisi-kontrak--satu-perubahan-satu-file)).
-- **#12 di luar scope FE M13** dan belum ada bentuknya. FE tidak mengirim apa pun ke M14 hari ini.
+- **E17 sengaja tidak dipanggil FE.** Sinkronisasi cuti M12 → kehadiran adalah proses server.
+  FE membaca hasilnya lewat E16 + kolom `cuti` di E18.
+- **E23 (audit log)** tidak ditampilkan: tidak ada AC US1–US5 yang memintanya. Perubahan aturan
+  tetap dicatat di BE (`created_by` sudah dikirim).
+- **E12** tidak dipanggil: FE memakai 6 status baku panduan UI (`hadir`, `terlambat`, `izin`,
+  `sakit`, `cuti`, `alpa`).
+- **E04** sudah ada di mock untuk kelengkapan kontrak; UI memakai E02/E03.
 
-### 5.1 Aturan umum (berlaku untuk semua endpoint)
+### 5.2 Aturan umum
 
-| Hal | Kesepakatan FE | Status |
-|---|---|---|
-| Base URL | `NEXT_PUBLIC_API_BASE_URL`, tanpa trailing slash | asumsi |
-| Zona waktu acuan | **server WIB** (`Asia/Jakarta`) | asumsi (PRD #1) |
-| Satuan toleransi | **menit**, bilangan bulat ≥ 0 | asumsi (PRD #2) |
-| Format bulan | **`YYYY-MM`** | asumsi (PRD #3) |
-| Timestamp | ISO 8601 **dengan offset** — `2026-10-05T08:17:00+07:00` | asumsi |
-| Tanggal tanpa jam | `YYYY-MM-DD` | asumsi |
-| Angka | number JSON, **bukan string** | asumsi (agar FE tidak perlu konversi) |
-| ID karyawan | satu format: `emp-1`, `emp-2`, … | ⚠️ PRD menulis `u-1` di `/me` tapi `emp-1` di rekap; FE menyeragamkan ke `emp-*` |
-| Header yang dikirim FE | `Content-Type: application/json` pada `PUT`/`POST` | lihat `src/lib/api/client.ts` |
-| Autentikasi | **belum ada** | ⚠️ BE harus menentukan (lihat di bawah) |
-| Cookies lintas origin | FE **belum** mengirim `credentials` | ⚠️ kalau BE memakai cookie session, tambahkan `credentials: "include"` di `src/lib/api/client.ts` (1 baris) |
+| Hal | Kesepakatan |
+|---|---|
+| Base URL | `NEXT_PUBLIC_API_BASE_URL`, tanpa trailing slash |
+| Zona waktu acuan | **server WIB** (`Asia/Jakarta`) |
+| Toleransi | **menit**, bilangan bulat **0–15** (maks. 15 per SA) |
+| Format bulan | `YYYY-MM` |
+| Timestamp | ISO 8601 dengan offset — `2026-10-05T08:17:00+07:00` |
+| Tanggal tanpa jam | `YYYY-MM-DD` |
+| Angka | number JSON, bukan string |
+| Header FE | `Content-Type: application/json` pada POST/PATCH/PUT |
+| Autentikasi | belum ada; mock memakai cookie `araya_employee` |
+| Cookies lintas origin | FE belum mengirim `credentials` |
 
-**Amplop galat** — semua respons non-2xx harus berbentuk:
+**Amplop galat** (semua non-2xx):
 
 ```json
 {
@@ -163,109 +178,78 @@ Catatan penting:
 }
 ```
 
-- `code` — string stabil untuk program. FE tidak mencocokkan `code` untuk menampilkan pesan, jadi **menambah kode baru tidak merusak FE**.
-- `message` — 1 kalimat bahasa Indonesia, **langsung ditampilkan ke pengguna**. Kalau BE punya pesan lebih baik, FE memakainya.
-- `fields` — **opsional**. Kalau ada, FE menempelkan tiap pesan ke kolom terkait (`workStart`, `workEnd`, `lateToleranceMinutes`, `type`, `startDate`, `endDate`, `reason`). Kalau tidak ada, pesan hanya muncul di toast.
+Kode yang dipakai FE: `VALIDATION_ERROR`, `INVALID_MONTH`, `ALREADY_CHECKED_IN`,
+`NOT_CHECKED_IN`, `ALREADY_CHECKED_OUT`, `NOT_FOUND`, `NOT_CANCELLABLE`,
+`DUPLICATE_EFFECTIVE_DATE`, `DUPLICATE_HOLIDAY`, `DATE_CONFLICT`,
+`RECAP_NOT_GENERATED`, `RECAP_LOCKED`, `RECAP_NOT_LOCKED`, `RECAP_SENT`,
+`FORBIDDEN`, `NETWORK_ERROR` (dibuat FE).
 
-**Kode galat yang sudah dipakai FE** (harap dipertahankan atau diumumkan perubahannya):
+### 5.3 E01–E04 — aturan jam kerja per jabatan (US1)
 
-| HTTP | `code` | Kapan | Dipakai di |
-|---|---|---|---|
-| 400 | `VALIDATION_ERROR` | input tidak lolos validasi [§5.8](#58-aturan-validasi-harus-sama-di-fe--be) | US1, US3 |
-| 400 | `INVALID_MONTH` | `month` bukan `YYYY-MM` | US5 |
-| 409 | `ALREADY_CHECKED_IN` | check-in kedua di hari yang sama | US2 |
-| 409 | `NOT_CHECKED_IN` | check-out tanpa check-in | US2 |
-| 409 | `ALREADY_CHECKED_OUT` | check-out kedua | US2 |
-| 409 | `NOT_CANCELLABLE` | membatalkan pengajuan yang sudah diproses | US3 |
-| 404 | `NOT_FOUND` | pengajuan tidak ada / bukan milik pemohon | US3 |
-| 0 | `NETWORK_ERROR` | dibuat FE sendiri saat `fetch` gagal | semua |
+ERD v2: `working_hours` milik **jabatan**, ber-versi.
 
-> PRD/README lama menyebut `INVALID_TIME_RANGE`. FE memakai `VALIDATION_ERROR` + `fields.workEnd` supaya pesan bisa menempel ke kolomnya. Kalau BE tetap ingin kode spesifik, kirim kode itu di `code` — FE tetap menampilkan `message`.
-
-### 5.2 `GET /me` — identitas & role
-
-**Dipakai:** AppShell (nama + penukar peran) dan guard halaman.
-
-```json
-{ "id": "emp-1", "name": "Rani Kusumawati", "role": "admin_hr" }
-```
-
-| Field | Tipe | Nilai | Dibaca FE untuk |
-|---|---|---|---|
-| `id` | string | `emp-*` | identitas pemakai |
-| `name` | string | nama tampil | navbar + sapaan |
-| `role` | string | `"admin_hr"` \| `"karyawan"` | **guard route** (mengarahkan ke halaman yang benar) |
-
-- Role atasan **tidak dipakai** di M13 (PRD #7). Kalau BE menambah role lain, FE harus diperbarui di `src/lib/types/index.ts` (`Role`) + `nav-items.ts`.
-
-### 5.3 `GET`/`PUT /attendance/work-settings` — M13-US1
-
-**Dipakai:** US1 (form pengaturan) + US2 (info jam kerja & batas toleransi).
-
-**Request `PUT`**
-
-```json
-{ "workStart": "08:00", "workEnd": "17:00", "lateToleranceMinutes": 15 }
-```
-
-**Response `GET` dan `PUT` (200)**
+**`POST /api/working-hours`** (201)
 
 ```json
 {
+  "positionId": "pos-staff",
   "workStart": "08:00",
   "workEnd": "17:00",
   "lateToleranceMinutes": 15,
-  "timezone": "Asia/Jakarta",
-  "updatedAt": "2026-10-05T10:00:00+07:00"
+  "workDays": [1, 2, 3, 4, 5],
+  "effectiveFrom": "2026-11-01"
 }
 ```
 
-| Field | Tipe | Wajib di response | Dibaca FE untuk |
-|---|---|---|---|
-| `workStart` | `"HH:MM"` | ya | input jam masuk, teks "08:00–17:00" di US2 |
-| `workEnd` | `"HH:MM"` | ya | input jam pulang, teks di US2 |
-| `lateToleranceMinutes` | number (integer ≥ 0) | ya | input toleransi, teks di US2 |
-| `timezone` | string | tidak | **tidak dibaca FE** (hanya diteruskan) |
-| `updatedAt` | ISO string | ya | teks "Terakhir diperbarui: 5 Okt 2026, 17.01 WIB" |
+Kontrak snake_case SA juga diterima: `position_id`, `clock_in_time`, `clock_out_time`,
+`late_tolerance_minutes`, `work_days` (`"1,2,3,4,5"`), `effective_from`.
 
-**Galat `PUT`**
-
-| HTTP | Kapan | `message` yang diharapkan |
-|---|---|---|
-| 400 | `workEnd <= workStart` | "Jam pulang harus setelah jam masuk." |
-| 400 | ada field kosong | "Jam masuk wajib diisi." / "Jam pulang wajib diisi." / "Toleransi wajib diisi." |
-| 400 | toleransi bukan integer | "Toleransi harus bilangan bulat, misalnya 15." |
-| 400 | toleransi < 0 | "Toleransi tidak boleh negatif." |
-
-**AC yang diuji:** US1-1 (tersimpan & dipakai perhitungan), US1-2 (`workEnd <= workStart` ditolak).
-
-### 5.4 `GET /attendance/today`, `POST /attendance/check-in`, `POST /attendance/check-out` — M13-US2
-
-**Request:** tanpa body (identitas pemakai diambil dari sesi/token).
-
-**Response `GET /attendance/today` (200)** — juga bentuk response `check-in` (`201`) dan `check-out` (`200`):
+**Response `GET /api/working-hours`** (array, terbaru dulu):
 
 ```json
-{
-  "date": "2026-10-05",
-  "checkInAt": "2026-10-05T08:17:00+07:00",
-  "checkOutAt": null,
-  "status": "terlambat",
-  "isLate": true,
-  "lateMinutes": 2
-}
+[
+  {
+    "id": "wh-2",
+    "positionId": "pos-staff",
+    "positionName": "Staff",
+    "workStart": "08:00",
+    "workEnd": "17:00",
+    "lateToleranceMinutes": 15,
+    "workDays": [1, 2, 3, 4, 5],
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": null,
+    "createdAt": "2026-10-01T08:30:00+07:00",
+    "createdBy": "emp-1"
+  }
+]
 ```
 
-| Field | Tipe | Nilai | Dibaca FE untuk |
-|---|---|---|---|
-| `date` | `YYYY-MM-DD` | hari ini (WIB) | judul kartu "Senin, 5 Okt 2026" |
-| `checkInAt` | ISO string \| `null` | jam masuk | baris "Masuk", penentu tombol **Check-out** vs **Check-in** |
-| `checkOutAt` | ISO string \| `null` | jam pulang | baris "Pulang", penentu "kehadiran sudah lengkap" |
-| `status` | `"hadir"` \| `"terlambat"` \| `"izin"` \| `"sakit"` \| `"cuti"` \| `"alpa"` \| `null` | status hari ini | badge status (`null` = belum check-in) |
-| `isLate` | boolean | terlambat atau tidak | teks "Anda terlambat N menit." + toast |
-| `lateMinutes` | number | menit lewat batas | teks jumlah menit terlambat |
+**Aturan bisnis yang wajib dijaga BE** (sama dengan mock):
 
-**Aturan terlambat — mohon dikunci di BE:**
+1. `workEnd > workStart`.
+2. `lateToleranceMinutes` integer 0–15.
+3. `workDays` minimal satu hari (1 = Senin … 7 = Minggu).
+4. `effectiveFrom` tidak boleh tanggal lampau.
+5. `UNIQUE(positionId, effectiveFrom)` → 409 `DUPLICATE_EFFECTIVE_DATE`.
+6. Saat versi baru dibuat, versi lama ditutup otomatis: `effectiveTo = effectiveFrom - 1 hari`.
+7. Satu aturan aktif per jabatan per tanggal.
+8. `GET /working-hours/active` mengembalikan aturan untuk **jabatan pengguna** (E03),
+   dipakai juga oleh halaman Hari ini untuk menampilkan jam & toleransi.
+9. Hanya `admin_hr` yang boleh menulis; perubahan mencatat `createdBy` (audit).
+
+### 5.4 E05–E07 — hari libur (US1)
+
+```json
+{ "date": "2026-12-25", "name": "Hari Raya Natal", "type": "NATIONAL" }
+```
+
+`type`: `NATIONAL` | `JOINT_LEAVE` | `CUSTOM`. Tanggal unik (409 `DUPLICATE_HOLIDAY`).
+Hari libur **bukan hari kerja**, jadi tidak boleh dihitung `alpa` oleh BE di rekap.
+
+### 5.5 E08–E11 — kehadiran (US2)
+
+E08/E09/E10 mengikuti bentuk yang sudah ada (lihat `TodayAttendance` di `types`).
+Aturan terlambat:
 
 ```
 batas       = workStart + lateToleranceMinutes
@@ -273,75 +257,54 @@ terlambat   = checkIn > batas
 lateMinutes = checkIn - batas
 ```
 
-Contoh acuan (dari PRD 5.2): `workStart 08:00`, toleransi `15`, check-in `08:17` → `terlambat`, `lateMinutes: 2`.
-
-**Galat**
-
-| Endpoint | HTTP | `code` | `message` |
-|---|---|---|---|
-| `check-in` | 409 | `ALREADY_CHECKED_IN` | "Anda sudah check-in hari ini." |
-| `check-out` | 409 | `NOT_CHECKED_IN` | "Anda belum check-in hari ini." |
-| `check-out` | 409 | `ALREADY_CHECKED_OUT` | "Anda sudah check-out hari ini." |
-
-**AC yang diuji:** US2-1 (check-in melewati toleransi → `terlambat`), US2-2 (check-in kedua ditolak, tidak ada entri ganda).
-
-> FE tidak pernah menampilkan tombol Check-in dua kali, jadi `409 ALREADY_CHECKED_IN` hanya muncul kalau ada dua tab/perangkat atau pemanggilan API langsung. BE tetap **wajib** menjaga keunikan (`UNIQUE(employee_id, date)`).
-
-### 5.5 `GET`/`POST /attendance/absence-requests`, `DELETE /attendance/absence-requests/{id}` — M13-US3
-
-**Request `POST`**
-
-```json
-{ "type": "izin", "startDate": "2026-10-06", "endDate": "2026-10-06", "reason": "Keperluan keluarga" }
-```
-
-**Response `GET` (200, array, terbaru dulu) & `POST` (201, satu objek)**
+**E11 `GET /api/attendance?month=YYYY-MM`** → array, terbaru dulu:
 
 ```json
 [
   {
-    "id": "abs-1",
     "employeeId": "emp-2",
-    "type": "izin",
-    "startDate": "2026-10-06",
-    "endDate": "2026-10-06",
-    "reason": "Keperluan keluarga",
-    "status": "pending",
-    "createdAt": "2026-10-05T10:10:00+07:00"
+    "employeeName": "Budi Santoso",
+    "tanggal": "2026-10-23",
+    "jam_check_in": "07:51",
+    "jam_check_out": "17:06",
+    "status": "hadir",
+    "lokasi": "The Araya lantai 2"
   }
 ]
 ```
 
-| Field | Tipe | Nilai | Dibaca FE untuk |
-|---|---|---|---|
-| `id` | string | id pengajuan | key tabel + target `DELETE` |
-| `employeeId` | string | `emp-*` | memastikan milik pemohon |
-| `type` | `"izin"` \| `"sakit"` | jenis | kolom "Jenis" |
-| `startDate`, `endDate` | `YYYY-MM-DD` | rentang | kolom "Tanggal" ("6 Okt 2026" / "6 Okt 2026 – 7 Okt 2026") |
-| `reason` | string | alasan | kolom "Alasan" (dipotong 1 baris) |
-| `status` | `"pending"` \| `"approved"` \| `"rejected"` | status persetujuan | badge + tombol "Batalkan" (hanya `pending`) |
-| `createdAt` | ISO string | waktu kirim | urutan riwayat |
+- `status` ∈ 6 status baku.
+- HR menerima semua karyawan; karyawan hanya barisnya sendiri (BE yang memfilter, bukan FE).
+- `lokasi` boleh `null` bila tidak ada check-in.
 
-**`DELETE`** → `204` tanpa body.
+### 5.6 E13–E15 — izin/sakit (US3)
 
-**Galat**
+**`POST /api/absence-requests`** (201) — **satu tanggal per pengajuan** (SA):
 
-| Endpoint | HTTP | `code` | Kapan |
-|---|---|---|---|
-| `POST` | 400 | `VALIDATION_ERROR` | `type` tidak valid, tanggal kosong/salah, `endDate < startDate`, atau `reason` kosong (spasi dianggap kosong) |
-| `DELETE` | 404 | `NOT_FOUND` | pengajuan tidak ada / bukan milik pemohon |
-| `DELETE` | 409 | `NOT_CANCELLABLE` | status sudah `approved`/`rejected` |
+```json
+{ "tanggal": "2026-10-06", "jenis": "izin", "alasan": "Keperluan keluarga" }
+```
 
-**AC yang diuji:** US3-1 (tersimpan sebagai `izin`/`sakit`), US3-2 (`reason` kosong ditolak + validasi tampil).
+Bentuk FE (`type`, `startDate`, `endDate`, `reason`) tetap diterima mock; FE selalu mengirim
+`endDate == startDate`.
 
-> ⚠️ `DELETE` (#9) **tidak ada di PRD**, tetapi `design.md` 4.3 mewajibkan kolom "Aksi" pada tabel riwayat dan `design.md` 3.6 mewajibkan dialog konfirmasi. FE menafsirkan aksi = "batalkan pengajuan `pending`". Perlu konfirmasi SA: kalau BE tidak menyediakan `DELETE`, FE akan menghapus kolom Aksi + tombolnya.
-> ⚠️ Alur persetujuan (siapa yang menyetujui, kapan) **di luar M13**. Pengajuan baru selalu `pending`; itulah sebabnya izin baru belum menambah kolom `izin` di rekap sampai disetujui.
+**`GET /api/absence-requests?status=pending|approved|rejected|all`** → array.
+Untuk HR, sertakan `employeeName` + `employeeDivision`.
 
-### 5.6 `GET /attendance/monthly-summary?month=YYYY-MM` — M13-US5 (+ M13-US4)
+**`PATCH /api/absence-requests/{id}/review`**
 
-**Query:** `month` wajib, format `YYYY-MM` (mis. `2026-10`).
+```json
+{ "decision": "approved" }
+```
 
-**Response (200)**
+Hanya `pending` yang bisa diproses (409 `ALREADY_DECIDED` di mock).
+
+`reason` wajib (spasi = kosong), maks 500 karakter. Tanggal bentrok dengan pengajuan aktif
+lain → 409 `DATE_CONFLICT` (mock).
+
+### 5.7 E18–E22 — rekap & M14 (US5)
+
+**`GET /api/recaps?month=YYYY-MM`**
 
 ```json
 {
@@ -360,215 +323,147 @@ Contoh acuan (dari PRD 5.2): `workStart 08:00`, toleransi `15`, check-in `08:17`
       "alpa": 0,
       "totalWorkDays": 23
     }
-  ]
+  ],
+  "meta": { "month": "2026-10", "generatedAt": null, "lockedAt": null, "sentAt": null }
 }
 ```
 
-| Field | Tipe | Dibaca FE untuk |
+Invarian: `present + late + izin + sakit + cuti + alpa == totalWorkDays`;
+`izin/sakit` hanya dari pengajuan `approved`; `cuti` hanya dari cuti disetujui M12;
+`alpa` = sisa, minimal 0. Bulan kosong → baris bernilai 0 + `hasData: false`.
+
+**Siklus** (semua `admin_hr`):
+
+| Endpoint | Efek | Galat |
 |---|---|---|
-| `month` | `YYYY-MM` | keterangan "Oktober 2026" |
-| `hasData` | boolean | kalau `false` → tampil banner "Belum ada data kehadiran pada bulan ini." bersama angka nol |
-| `rows[].employeeId` | string | key baris |
-| `rows[].name` | string | kolom "Karyawan" + pencarian |
-| `rows[].division` | string | kolom "Divisi" + pencarian |
-| `rows[].present` | number | kolom "Hadir" (rata kanan) |
-| `rows[].late` | number | kolom "Terlambat" |
-| `rows[].izin` | number | kolom "Izin" |
-| `rows[].sakit` | number | kolom "Sakit" |
-| `rows[].cuti` | number | kolom "Cuti" — **dari cuti disetujui M12** |
-| `rows[].alpa` | number | kolom "Alpa" |
-| `rows[].totalWorkDays` | number | kolom "Total hari kerja" |
+| `POST /api/recaps/generate` `{month}` | isi `generatedAt` | 409 `RECAP_LOCKED` |
+| `POST /api/recaps/lock` `{month}` | isi `lockedAt` | 409 `RECAP_NOT_GENERATED`, `RECAP_LOCKED` |
+| `POST /api/recaps/send-to-m14` `{month}` | isi `sentAt`, buat log | 409 `RECAP_NOT_LOCKED`, `RECAP_SENT` |
+| `GET /api/recap-exports` | log pengiriman | — |
 
-**Invarian yang harus dijaga BE:**
+**Aturan:** rekap terkunci tidak bisa dihitung ulang; rekap terkirim bersifat final.
+Bentuk payload ke M14 **belum ditentukan** — mock hanya mencatat log.
 
-```
-present + late + izin + sakit + cuti + alpa == totalWorkDays
-present      = hadir tepat waktu (late dihitung terpisah, bukan bagian dari present)
-alpa         = totalWorkDays - (present + late + izin + sakit + cuti), minimal 0
-izin, sakit  = hanya dari pengajuan berstatus approved
-cuti         = hanya dari cuti berstatus disetujui (kontrak M12)
-```
+### 5.8 Validasi (dipakai form DAN route mock)
 
-**Bulan tanpa data:** kirim **baris karyawan dengan angka 0** dan `hasData: false`.
+Sumber tunggal: `src/lib/validation/index.ts`.
 
-```json
-{
-  "month": "2026-08",
-  "hasData": false,
-  "rows": [
-    { "employeeId": "emp-1", "name": "Rani Kusumawati", "division": "HR",
-      "present": 0, "late": 0, "izin": 0, "sakit": 0, "cuti": 0, "alpa": 0, "totalWorkDays": 0 }
-  ]
-}
-```
-
-> Alasan: AC2 US5 berbunyi "tampil **nol** & pesan kosong (bukan error)". `rows: []` (seperti contoh PRD 5.4) juga tidak error, tapi tidak menampilkan nol. FE sudah menangani keduanya; yang diharapkan adalah bentuk di atas.
-
-**Galat**
-
-| HTTP | `code` | Kapan |
-|---|---|---|
-| 400 | `INVALID_MONTH` | `month` bukan `YYYY-MM` |
-
-**AC yang diuji:** US5-1 (semua kolom status tampil), US5-2 (bulan kosong → nol + pesan), US4-1 (cuti disetujui → `cuti` naik, `alpa` tidak), US4-2 (cuti `pending`/`rejected` → tidak dihitung cuti).
-
-### 5.7 `GET /leave/approved?from=YYYY-MM-DD&to=YYYY-MM-DD` — kontrak M12 (M13-US4)
-
-**Status: MOCK, menunggu kontrak final M12.**
-
-```json
-[
-  { "employeeId": "emp-2", "date": "2026-10-07" },
-  { "employeeId": "emp-2", "date": "2026-10-08" }
-]
-```
-
-| Field | Tipe | Dibaca FE untuk |
-|---|---|---|
-| `employeeId` | string | mencocokkan cuti ke karyawan di rekap |
-| `date` | `YYYY-MM-DD` | menghitung jumlah hari cuti bulan itu |
-
-- Satu baris = **satu tanggal** cuti yang **sudah disetujui**. Cuti `pending`/`rejected` **tidak boleh** muncul di sini.
-- Yang dibutuhkan FE minimal: `employeeId` + tanggal. Nama field boleh berbeda asal diberitahukan ([§6](#6-titik-revisi-kontrak--satu-perubahan-satu-file)).
-- Halaman `/kehadiran/rekap` juga memanggil endpoint ini untuk menampilkan keterangan "N hari cuti berstatus disetujui dari modul M12 ikut dihitung sebagai cuti".
-
-⚠️ Setelah kontrak M12 final, perubahan hanya di 2 tempat: `getApprovedLeave()` di `src/lib/api/kehadiran.ts` dan perhitungan `cuti` di `src/app/api/mock/attendance/monthly-summary/route.ts`.
-
-### 5.8 Aturan validasi (harus sama di FE & BE)
-
-Sumber tunggal: `src/lib/validation/index.ts` — **dipakai form DAN route handler mock**, jadi tidak ada dua versi aturan yang bisa berbeda.
-
-**Pengaturan jam kerja**
-
-| Field | Aturan | Pesan yang ditampilkan |
-|---|---|---|
-| `workStart` | wajib, `HH:MM` 00:00–23:59 | "Jam masuk wajib diisi." · "Format jam harus HH:MM, misalnya 08:00." |
-| `workEnd` | wajib, `HH:MM` 00:00–23:59 | "Jam pulang wajib diisi." |
-| `workEnd` | harus **>** `workStart` | "Jam pulang harus setelah jam masuk." |
-| `lateToleranceMinutes` | wajib, integer, ≥ 0 | "Toleransi wajib diisi." · "Toleransi harus bilangan bulat, misalnya 15." · "Toleransi tidak boleh negatif." |
-
-**Izin/sakit**
-
-| Field | Aturan | Pesan yang ditampilkan |
-|---|---|---|
-| `type` | wajib, `izin`/`sakit` | "Pilih jenis pengajuan." |
-| `startDate` | wajib, `YYYY-MM-DD` | "Tanggal mulai wajib diisi." · "Tanggal mulai tidak valid." |
-| `endDate` | wajib, ≥ `startDate` | "Tanggal selesai wajib diisi." · "Tanggal selesai tidak boleh sebelum tanggal mulai." |
-| `reason` | wajib (spasi = kosong), maks 500 karakter | "Alasan wajib diisi." · "Alasan maksimal 500 karakter." |
-
-Pola validasi UI: cek saat **blur** dan saat **kirim**, tidak saat mengetik (`design.md` 3.3).
+| Form | Aturan |
+|---|---|
+| Aturan jam kerja | jabatan wajib; jam `HH:MM`; pulang > masuk; toleransi integer 0–15; hari kerja ≥ 1; tanggal berlaku ≥ hari ini |
+| Hari libur | tanggal valid; nama wajib; jenis salah satu dari 3 |
+| Izin/sakit | jenis `izin`/`sakit`; tanggal valid; alasan wajib, maks 500 |
 
 ---
 
 ## 6. Titik revisi kontrak — satu perubahan, satu file
 
-Tidak ada komponen halaman yang perlu disentuh saat kontrak berubah.
-
 | Kalau BE mengubah… | Ubah file ini saja |
 |---|---|
-| Path endpoint | `src/lib/api/kehadiran.ts` (11 fungsi, satu baris per endpoint) |
+| Path endpoint | `src/lib/api/kehadiran.ts` + nama folder di `src/app/api/mock/**` |
 | Base URL | `.env.local` → `NEXT_PUBLIC_API_BASE_URL` |
 | Bentuk field request/response | `src/lib/types/index.ts` + `src/lib/api/kehadiran.ts` |
-| Nama field pada amplop galat (`fields`) | `src/lib/api/client.ts` (`ApiError.fields`) |
+| Amplop galat (`fields`) | `src/lib/api/client.ts` (`ApiError.fields`) |
 | Aturan validasi | `src/lib/validation/index.ts` |
-| Status baru | `src/lib/types/index.ts` + `ATTENDANCE`/`APPROVAL` di `src/components/ui/Badge.tsx` (harus dipetakan ke 5 warna baku) |
-| Warna badge `cuti` (`info` → `neutral`) | **satu baris**: `ATTENDANCE.cuti.tone` di `src/components/ui/Badge.tsx` (`design.md` TBD) |
-| Endpoint cuti M12 final | `getApprovedLeave()` di `src/lib/api/kehadiran.ts` + perhitungan `cuti` di `src/app/api/mock/attendance/monthly-summary/route.ts` |
-| Autentikasi (token/header/cookie) | `src/lib/api/client.ts` (tambah header atau `credentials`) |
-| Halaman masuk & daftar akun | `src/components/auth/LoginPage.tsx` + `src/lib/api/auth.ts` |
-| Perilaku kolom cari navbar | `src/components/layout/search-context.tsx` (+ `useSearchTarget` di halaman berdaftar) |
-| Mode gelap (opt-in) | `src/styles/tokens.css` — blok `:root[data-theme="dark"]` |
-| Kode galat baru | **tidak ada perubahan FE** — FE hanya menampilkan `message` dari BE |
+| Status baru | `src/lib/types/index.ts` + `Badge.tsx` |
+| Kontrak cuti M12 final | `getApprovedLeave()` di `src/lib/api/kehadiran.ts` + perhitungan `cuti` di `src/app/api/mock/recaps/route.ts` |
+| Payload M14 final | `sendRecapToM14()` di `src/lib/api/kehadiran.ts` |
+| Autentikasi | `src/lib/api/client.ts` (+ `src/lib/auth/session.ts` bila bukan cookie) |
+| Daftar jabatan | `POSITIONS` di `src/mocks/store.ts` (BE: dari M12) |
 | Format tanggal/jam/angka | `src/lib/format/index.ts` |
 | Token desain | `src/styles/tokens.css` + `tailwind.config.ts` |
-
-Urutan aman saat kontrak berubah: **kontrak → `types` → `api/kehadiran.ts` → (kalau perlu) `validation` → `npm run build`.**
 
 ---
 
 ## 7. Mock: cara kerja & batasnya
 
-Semua di prefix `/api/mock`, **khusus dev**. Semua `force-dynamic` supaya tidak ter-prerender saat build.
+Semua di prefix `/api/mock`, khusus dev, `force-dynamic`.
 
-| Endpoint mock | Method | Keterangan |
+| Endpoint mock | Method | Padanan SA |
 |---|---|---|
-| `/api/mock/accounts` | GET | daftar akun untuk halaman masuk |
-| `/api/mock/session` | POST, DELETE | masuk (set cookie `araya_employee`) / keluar |
-| `/api/mock/me` | GET | session dari cookie `araya_employee` |
-| `/api/mock/attendance/work-settings` | GET, PUT | US1 |
-| `/api/mock/attendance/today` | GET | US2 |
-| `/api/mock/attendance/check-in` | POST | US2, 409 bila ganda |
-| `/api/mock/attendance/check-out` | POST | US2 |
-| `/api/mock/attendance/absence-requests` | GET, POST | US3 |
-| `/api/mock/attendance/absence-requests/{id}` | DELETE | batalkan pengajuan `pending` |
-| `/api/mock/attendance/monthly-summary?month=YYYY-MM` | GET | US5 + US4 |
-| `/api/mock/leave/approved?from=&to=` | GET | kontrak cuti M12 (mock) |
-| `/api/mock/reset` | POST | kembalikan data seed |
+| `/api/mock/working-hours` | GET, POST | E02, E01 |
+| `/api/mock/working-hours/active` | GET | E03 |
+| `/api/mock/working-hours/{id}` | GET | E04 |
+| `/api/mock/holidays` | GET, POST | E06, E05 |
+| `/api/mock/holidays/{id}` | DELETE | E07 |
+| `/api/mock/attendance` | GET | E11 |
+| `/api/mock/attendance/today` | GET | E10 |
+| `/api/mock/attendance/check-in` | POST | E08 |
+| `/api/mock/attendance/check-out` | POST | E09 |
+| `/api/mock/absence-requests` | GET, POST | E14, E13 |
+| `/api/mock/absence-requests/{id}/review` | PATCH | E15 |
+| `/api/mock/absence-requests/{id}` | DELETE | **mock-only** (pembatalan) |
+| `/api/mock/leaves?status=APPROVED` | GET | E16 |
+| `/api/mock/recaps?month=` | GET | E18 |
+| `/api/mock/recaps/generate` | POST | E19 |
+| `/api/mock/recaps/lock` | POST | E20 |
+| `/api/mock/recaps/send-to-m14` | POST | E21 |
+| `/api/mock/recap-exports` | GET | E22 |
+| `/api/mock/positions` | GET | **mock-only** (ref M12) |
+| `/api/mock/leave/quota` | GET | **mock-only** (kuota cuti dashboard) |
+| `/api/mock/accounts`, `/session`, `/me`, `/reset` | — | mock auth/dev |
 
-**Seed data** (`src/mocks/store.ts`):
+**Seed data** (`src/mocks/store.ts`) — fixture sementara, bukan sumber kebenaran:
 
-> ⚠️ **Fixture sementara, bukan sumber kebenaran.** Isinya dirancang **perlu** agar tiap AC bisa dibuktikan tanpa input manual: AC2 US5 butuh bulan berisi + bulan kosong, AC2 US4 butuh cuti `approved` + pengajuan `pending` pada orang berbeda, AC1/2 US2 butuh hari ini **kosong**. Jangan dikosongkan (demo jadi tidak bisa dibuktikan) dan **jangan ditambah** (showcase memakai data yang sama dengan data uji). Setelah ERD/API contract SA keluar, cukup sesuaikan nama field & nilai di file ini — halaman tidak perlu diubah ([§6](#6-titik-revisi-kontrak--satu-perubahan-satu-file)).
+- Jabatan: `HR` (`pos-hr`), `Staff` (`pos-staff`). Karyawan: `emp-1` Rani (HR),
+  `emp-2` Budi (Staff/Keuangan), `emp-3` Sinta (Staff/Operasional).
+- Aturan: Staff & HR 08:00–17:00, toleransi 15, Senin–Jumat. Ada satu **versi lama** (bulan lalu)
+  untuk menunjukkan `effectiveTo` terisi.
+- Hari libur: 1 contoh pada tanggal 5.
+- Hari ini kosong untuk `emp-2` (alur check-in → terlambat → check-out bisa didemokan utuh).
+- Pengajuan: campuran `approved`/`pending`/`rejected`; cuti M12: 2 hari untuk `emp-2`.
+- Rekap: `emp-1` (20/1/0/1/0/1), `emp-2` (18/2/1/0/2/0), `emp-3` (15/1/0/1/0/6).
 
-- Pengaturan: 08:00–17:00, toleransi 15 menit.
-- 3 karyawan: `emp-1` Rani Kusumawati (**admin_hr**, HR), `emp-2` Budi Santoso (**karyawan**, Keuangan), `emp-3` Sinta Maharani (karyawan, Operasional).
-- Kehadiran hari ini **kosong** untuk `emp-2` supaya alur check-in → deteksi terlambat → check-out bisa didemokan utuh.
-- Pengajuan izin/sakit: campuran `approved` / `pending` / `rejected` (6 baris).
-- Cuti disetujui M12: 2 hari untuk `emp-2` → `cuti: 2`, `alpa: 0`.
-- `emp-3` punya izin **pending** 2 hari → tetap `alpa` (bukti AC2 US4).
-- Rekap bulan berjalan: `emp-1` (hadir 20, terlambat 1, sakit 1, alpa 1), `emp-2` (18 / 2 / izin 1 / cuti 2 / alpa 0), `emp-3` (15 / 1 / sakit 1 / alpa 6). Bulan lain = kosong.
+**Batas mock:**
 
-**Batas mock yang harus diketahui:**
-
-- Store **in-memory** → hilang saat server restart, tidak dibagi antar instance/serverless. Cukup untuk demo.
-- Masuk tanpa kata sandi: halaman `/masuk` hanya memilih salah satu dari 3 akun di seed. BE asli harus menyediakan autentikasi sendiri ([§10](#10-cara-ganti-mock--be-asli)).
-- Route mock memakai `EMPLOYEES[0]` bila dipanggil tanpa cookie (mis. saat uji `curl`); halaman tetap dijaga `requireSession()`.
-- Persetujuan izin/sakit tidak diotomasi (selalu `pending`).
-- Waktu memakai jam server (WIB), bukan jam browser.
+- Store **in-memory** → hilang saat restart / tidak dibagi antar instance serverless.
+- Masuk tanpa kata sandi (pilih akun). BE wajib menyediakan autentikasi.
+- `GET /api/attendance` menurunkan baris harian dari agregat seed + izin/cuti disetujui,
+  hanya sampai hari ini. Angka `alpa` harian bisa lebih kecil dari `alpa` rekap
+  (rekap memakai total hari kerja sebulan). BE asli menghitung dari tabel kehadiran.
+- Foto/lokasi check-in disimulasikan (geofence 50 m + reverse-geocode OSM + cek spoof di klien).
+- Pembatalan pengajuan hanya ada di mock (SA tidak mencantumkan `DELETE`).
 
 ### Demo `terlambat` tanpa bergantung jam
 
 1. **Alami** — check-in setelah pukul `08:15 WIB`.
-2. **Deterministik** — sebagai Admin HR buka `/kehadiran/pengaturan`, set **jam masuk `00:00` + toleransi `0`**, simpan; lalu check-in sebagai Karyawan. Ini sekaligus membuktikan AC1 US1 ("aturan tersimpan dan **dipakai perhitungan kehadiran**").
+2. **Deterministik** — Admin HR → Pengaturan → buat aturan baru untuk jabatan karyawan
+   dengan jam masuk `00:00` + toleransi `0`, berlaku hari ini; lalu check-in sebagai karyawan.
+   Ini sekaligus membuktikan aturan tersimpan **dan dipakai** perhitungan.
 
 ---
 
-## 8. Uji manual & otomatis
-
-### 8.1 Uji manual per Acceptance Criteria
-
-Jalankan `npm run dev`, lalu buka `http://localhost:3000` → dialihkan ke `/masuk`. Pilih akun untuk ganti peran (`Rani` = Admin HR, `Budi`/`Sinta` = Karyawan); **Keluar** dari menu akun di kanan navbar untuk ganti akun.
+## 8. Uji manual per Acceptance Criteria
 
 | AC | Langkah | Harapan |
 |---|---|---|
-| US1-1 | Admin → Pengaturan → isi 08:00 / 17:00 / 15 → Simpan | toast hijau "Pengaturan tersimpan", "Terakhir diperbarui" berubah; nilai ikut dipakai di halaman Hari ini |
-| US1-2 | Set jam pulang **lebih awal** dari jam masuk → Simpan | kolom jam pulang merah + "Jam pulang harus setelah jam masuk.", **tidak tersimpan** |
-| US1 (validasi) | Jam masuk dikosongkan → Simpan | "Jam masuk wajib diisi." |
-| US1 (validasi) | Toleransi `-1` atau `1.5` → Simpan | "Toleransi tidak boleh negatif." · "Toleransi harus bilangan bulat, misalnya 15." |
-| US2-1 | Karyawan → Hari ini → Check-in setelah batas toleransi | badge kuning **Terlambat** + "Anda terlambat N menit." |
-| US2-2 | Check-in dua kali (panggil API, atau dua tab) | `409 ALREADY_CHECKED_IN` "Anda sudah check-in hari ini."; tombol berubah jadi Check-out sehingga tidak bisa dobel dari UI |
-| US2 (lanjutan) | Check-out | jam "Pulang" terisi, tombol hilang, muncul "Kehadiran hari ini sudah lengkap." |
-| US3-1 | Karyawan → Izin & sakit → Jenis Izin, 2 tanggal, alasan → Kirim | toast "Pengajuan terkirim"; baris baru muncul di `/kehadiran/izin/riwayat` dengan badge **Menunggu** |
-| US3-2 | Alasan dikosongkan → Kirim | "Alasan wajib diisi." + tidak terkirim |
-| US3 (validasi) | Tanggal selesai < tanggal mulai | "Tanggal selesai tidak boleh sebelum tanggal mulai." |
-| US3 (riwayat) | Riwayat → ketik di kolom cari navbar | tabel menyaring berdasarkan alasan; "Filter status" menyaring Menunggu/Disetujui/Ditolak |
-| US3 (batal) | Riwayat → Batalkan pada baris **Menunggu** | dialog konfirmasi → baris hilang + toast; baris **Disetujui** tidak punya tombol batalkan |
-| US5-1 | Admin → Rekap → pilih bulan berjalan | tabel hadir/terlambat/izin/sakit/cuti/alpa/total per karyawan |
-| US5-2 | Pilih bulan tanpa data (mis. 2026-08) | semua angka **0** + banner "Belum ada data kehadiran pada bulan ini." (bukan galat) |
-| US4-1 | Rekap bulan berjalan | `emp-2` `cuti: 2`, `alpa: 0` — dari 2 hari cuti disetujui M12 |
-| US4-2 | Rekap bulan berjalan | `emp-3` `cuti: 0` walau ada izin **pending** → tetap masuk `alpa` |
-| Guard | Admin buka `/kehadiran/hari-ini` | dialihkan ke `/kehadiran/pengaturan` (dan sebaliknya) |
-| Guard | Buka halaman mana pun di jendela penyamaran (tanpa cookie) | dialihkan ke `/masuk` |
-| Pencarian navbar | Rekap → ketik di kolom cari navbar | tabel menyaring nama/divisi; kolom cari **tidak muncul** di halaman tanpa daftar (mis. Pengaturan) |
-| Responsif | Perkecil ke 400px | tidak ada scroll horizontal halaman; tabel bergulir di dalam kartunya |
+| US1-1 | HR → Pengaturan → pilih jabatan → isi jam/toleransi/hari kerja/tanggal → Simpan | toast sukses; kartu "Aturan yang berlaku" berubah; versi lama masuk tabel riwayat dengan status Arsip |
+| US1-2 | Jam pulang ≤ jam masuk → Simpan | pesan di kolom jam pulang, tidak tersimpan |
+| US1 (toleransi) | Isi `16` atau `1.5` | "Toleransi maksimal 15 menit." / "Toleransi harus bilangan bulat…" |
+| US1 (tanggal) | Pilih tanggal kemarin | "Tanggal berlaku tidak boleh masa lalu." |
+| US1 (versi) | Simpan 2 aturan dengan tanggal sama | 409 "Sudah ada aturan untuk jabatan ini pada tanggal tersebut." |
+| US1 (libur) | Tambah hari libur → muncul di tabel; Hapus → dialog konfirmasi | data hilang setelah konfirmasi |
+| US2-1 | Karyawan → Hari ini → Check-in lewat batas toleransi | badge **Terlambat** + menit keterlambatan |
+| US2-2 | Check-in dua kali | 409 `ALREADY_CHECKED_IN`; UI tidak menampilkan tombol ganda |
+| US2 (riwayat) | Buka `/kehadiran/riwayat` | tabel harian + legenda 6 status; HR melihat semua karyawan, karyawan hanya dirinya |
+| US3-1 | Karyawan → Izin → pilih tanggal & alasan → Kirim | toast sukses; baris **Menunggu** di riwayat |
+| US3-2 | Alasan kosong → Kirim | "Alasan wajib diisi." |
+| US3 (HR) | HR → Persetujuan → Setujui/Tolak | badge berubah; rekap ikut berubah setelah disetujui |
+| US4-1 | Rekap bulan berjalan | `emp-2` `cuti: 2`, `alpa: 0` |
+| US4-2 | Rekap bulan berjalan | cuti/izin `pending` tidak menambah cuti |
+| US5-1 | HR → Rekap → **Hitung rekap** | meta "Dihitung" terisi |
+| US5-2 | Pilih bulan tanpa data | semua angka 0 + banner "Belum ada data…" |
+| US5-3 | **Kunci rekap** → coba Hitung ulang | tombol hitung hilang / 409 `RECAP_LOCKED` |
+| US5-4 | **Kirim ke M14** setelah dikunci | status "Terkirim ke M14"; log muncul di Riwayat pengiriman; aksi final |
+| Guard | Buka halaman role lain | dialihkan ke beranda role-nya |
+| Guard | Tanpa cookie | dialihkan ke `/masuk` |
+| Responsif | 400px | tidak ada scroll horizontal halaman (diverifikasi 6 halaman) |
 
-### 8.2 Cek otomatis yang sudah dijalankan
+**Cek otomatis yang sudah dijalankan:** `npm run build` hijau; curl mock untuk
+E01–E07, E11, E13–E15, E18–E22 (termasuk 409/400); screenshot Playwright 1280 & 400
+untuk Pengaturan, Riwayat (HR/karyawan), Rekap, Izin, Riwayat izin.
 
-- `npm run build` → **hijau** (7 route halaman + 12 route mock, type check lolos).
-- 16/16 skenario AC terhadap route handler mock: US1 simpan/ditolak, US2 check-in terlambat + 409 ganda + check-out, US3 kirim + 400 alasan kosong + batalkan (409 untuk `approved`, 404 untuk milik orang lain), US5 rekap berisi + bulan kosong (`hasData:false`, semua 0), US4 cuti disetujui dihitung + cuti `pending` jadi alpa, guard role 307, halaman 200.
-- Audit kepatuhan panduan: 0 hex di `src/`, 0 ukuran font manual, 0 spacing di luar skala, 0 `<button>` mentah di luar `src/components/ui`.
-- Cek visual (Playwright, 1280/1024/400px): warna token cocok byte-per-byte dengan Lampiran PDF, tidak ada scroll horizontal di 400px, tampilan tetap terang walau OS gelap.
-
-**Belum ada test otomatis (unit/e2e).** Cek di atas dijalankan manual lewat `curl`. Perlu ditambah bila modul dilanjutkan.
+**Belum ada test otomatis (unit/e2e).**
 
 ---
 
@@ -576,45 +471,43 @@ Jalankan `npm run dev`, lalu buka `http://localhost:3000` → dialihkan ke `/mas
 
 | Item | Status |
 |---|---|
-| Kirim payload rekap ke M14 (penggajian) — endpoint #12 | **belum**, menunggu kontrak (PRD #6) |
-| Kontrak cuti M12 final — endpoint #11 | **mock**, menunggu BE (PRD #5) |
-| `DELETE` pengajuan (endpoint #9) + kolom Aksi | interpretasi FE, menunggu konfirmasi SA |
-| Autentikasi nyata (token/header/cookie) | belum; mock memakai halaman masuk pilih akun + cookie `araya_employee` (tanpa kata sandi) |
-| Ekspor rekap (CSV/XLSX) | **tidak dikerjakan** — P1 (PRD #8) |
-| **Riwayat kehadiran karyawan + status `cuti` & legenda** (Sprint Plan `US4-06`, PIC FE, 1 Nov) | **belum ada halamannya.** Kolom `cuti` di rekap tidak menutup ini. Butuh daftar riwayat + legenda status → endpoint baru (ambil 7 hari terakhir sebagai basis, P1 di PRD, belum ada endpoint) |
-| Riwayat 7 hari terakhir di halaman Hari ini | **tidak dikerjakan** — P1, belum ada endpoint |
-| Role atasan | **tidak dipakai** di M13 (PRD #7) |
-| Warna badge `cuti`: `info` atau `neutral` | sementara **`info`**; ubah 1 baris di `Badge.tsx` (`design.md` TBD) |
-| Kolom "Total Jam Kerja" di rekap | belum, `design.md` TBD |
-| Pencarian global lintas modul | belum ada. Yang aktif hari ini: kolom cari navbar menyaring daftar **di halaman yang sedang dibuka** |
-| Pencarian di toolbar tabel (Panduan UI 3 · Tabel) | **dipindah ke navbar** supaya tidak ada dua kotak cari untuk hal yang sama; kotak filter (status/bulan) tetap di toolbar |
-| Input tanggal & jam bawaan browser | teksnya mengikuti bahasa browser (`mm/dd/yyyy`, `08:00 AM`), bukan format panduan (`5 Okt 2026`) karena `<input type="date">`/`type="time"` tidak bisa diubah. Butuh pemilih tanggal buatan sendiri bila wajib persis |
-| Mode gelap | **tidak dipakai** (PRD tidak meminta). Nilai gelap Lampiran PDF tetap tersimpan di `tokens.css`, aktif lewat `data-theme="dark"` |
-| Tombol "Simpan" di header halaman (design.md 4.1) | **tidak dipasang** — `design.md` 4.1 menggambar 2 tombol utama sedangkan Panduan UI melarang >1 tombol utama per layar. **PDF menang**; satu tombol utama ada di kanan bawah form. |
-| Focus trap penuh di Dialog | tidak ada; cukup fokus awal ke "Batal" + Escape |
+| Payload rekap ke M14 (E21) | **mock**; bentuk final belum ditentukan M14 |
+| Kontrak cuti M12 (E16) | **mock**, menunggu kontrak final |
+| E17 `sync-leaves` | **tidak dipakai FE** — proses server |
+| E23 audit log | **tidak ada UI** — tidak ada AC; BE tetap mencatat `created_by` |
+| E12 master status | **tidak dipakai** — 6 status baku panduan UI |
+| Pembatalan pengajuan (`DELETE`) | **mock-only**; SA tidak mencantumkan endpoint |
+| Autentikasi nyata | belum; mock pilih akun + cookie `araya_employee` |
+| Role atasan | tidak dipakai di M13 |
+| Ekspor rekap CSV/XLSX | belum (P1); export CSV yang ada = log presensi harian |
+| Input tanggal/jam bawaan browser | teks mengikuti locale browser (`mm/dd/yyyy`, `08:00 AM`); butuh picker buatan sendiri bila harus persis format panduan |
+| Kolom "Total Jam Kerja" di rekap | belum; `design.md` TBD |
+| Focus trap penuh di Dialog | belum; fokus awal + Escape |
 | Test otomatis | belum ada |
 
 ---
 
 ## 10. Cara ganti mock → BE asli
 
-1. Set `NEXT_PUBLIC_USE_MOCK=false` dan `NEXT_PUBLIC_API_BASE_URL` ke BE.
-2. Pastikan BE mengikuti [§5](#5-kontrak-api--daftar-endpoint-yang-dibutuhkan-be) (termasuk amplop galat + `fields`).
-3. Kalau ada beda nama field/path, sesuaikan **hanya** `src/lib/api/kehadiran.ts` dan `src/lib/types/index.ts` ([§6](#6-titik-revisi-kontrak--satu-perubahan-satu-file)).
-4. Kalau BE memakai cookie session, tambahkan `credentials: "include"` di `src/lib/api/client.ts`.
-5. **Halaman masuk perlu penyesuaian** (belum ada kontraknya): `src/lib/api/auth.ts` memanggil `GET /accounts` dan `POST/DELETE /session` pada BE. Kalau BE memakai SSO/token, ganti isi file itu + `LoginPage.tsx`; cookie `araya_employee` diganti mekanisme BE, dan `requireSession()` di `src/lib/auth/session.ts` disesuaikan.
-6. Jalankan smoke test manual per AC di [§8.1](#81-uji-manual-per-acceptance-criteria).
-7. Mock boleh tetap hidup (tidak dipanggil) — tidak perlu dihapus.
+1. Set `NEXT_PUBLIC_USE_MOCK=false` + `NEXT_PUBLIC_API_BASE_URL`.
+2. Pastikan BE mengikuti §5 (termasuk amplop galat + `fields`).
+3. Beda nama field/path → sesuaikan **hanya** `lib/api/kehadiran.ts` + `lib/types/index.ts`.
+4. Cookie session → tambah `credentials: "include"` di `lib/api/client.ts`.
+5. Halaman masuk: ganti `lib/api/auth.ts` + `LoginPage.tsx` sesuai mekanisme BE;
+   sesuaikan `requireSession()` di `lib/auth/session.ts`.
+6. Jalankan smoke test §8. Mock boleh tetap hidup (tidak dipanggil).
 
 ---
 
-## 11. Deploy (Netlify)
+## 11. Deploy
 
-1. Connect repo → preset **Next.js**.
-2. Build command `npm run build`, publish dir `.next` (ditangani Next.js runtime Netlify).
-3. Env di Netlify: `NEXT_PUBLIC_USE_MOCK=true` (cukup untuk demo kampus), `NEXT_PUBLIC_API_BASE_URL`.
-4. ⚠️ Ingat: store mock in-memory → di serverless, data check-in/pengajuan bisa hilang antar-instance. Alur US1/US3/US5 tetap jalan (pengaturan disimpan di memori instance yang melayani).
-5. ⚠️ Tidak dikonfigurasi/diuji di komputer ini.
+FE demo: **Vercel** — `https://fe-araya-bussiness-attendace-module.vercel.app`
+(sesuai catatan Sprint Plan; konfigurasi Netlify lama tidak dipakai).
+
+1. Import repo → preset **Next.js**, build `npm run build`.
+2. Env: `NEXT_PUBLIC_USE_MOCK=true` untuk demo, `NEXT_PUBLIC_API_BASE_URL` untuk BE asli.
+3. ⚠️ Store mock in-memory di serverless: data bisa hilang antar-instance.
+4. ⚠️ Deploy tidak diverifikasi ulang di sesi ini.
 
 ---
 
@@ -623,4 +516,4 @@ Jalankan `npm run dev`, lalu buka `http://localhost:3000` → dialihkan ke `/mas
 - `feat(m13-usX): ...`
 - `fix(...)`, `chore(...)`, `docs(readme): ...`
 
-Kalau kontrak BE berubah, commit-nya **wajib** menyentuh README §5/§6 agar perjanjian tetap sinkron dengan kode.
+Kalau kontrak BE berubah, commit **wajib** menyentuh README §5/§6 agar tetap sinkron dengan kode.
