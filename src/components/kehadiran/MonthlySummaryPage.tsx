@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Banner } from "@/components/ui/Banner";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, Select } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, type Column } from "@/components/ui/Table";
+import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/client";
-import { getRecap } from "@/lib/api/kehadiran";
+import { getKaryawanAktif, getRecap, pushRekapKeM14 } from "@/lib/api/kehadiran";
 import { currentMonth, formatMonthLabel } from "@/lib/format";
-import type { LiveRecap } from "@/lib/types";
+import type { LiveRecap, M12Employee } from "@/lib/types";
 
 const BULAN_LABEL = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -20,6 +22,15 @@ const BULAN_LABEL = [
 const TAHUN_LIST = [2025, 2026, 2027];
 
 type RecapRow = NonNullable<LiveRecap["data"]>["rekap"][number];
+type RecapViewRow = RecapRow & { nama: string };
+
+const KATEGORI_LABEL: Record<string, string> = {
+  hadir: "Hadir",
+  terlambat: "Terlambat",
+  izin_sakit: "Izin / Sakit",
+  cuti: "Cuti",
+  alpa: "Alpa",
+};
 
 function defaultBulanTahun(): { bulan: number; tahun: number } {
   const [tahun, bulan] = currentMonth().split("-").map(Number);
@@ -27,9 +38,13 @@ function defaultBulanTahun(): { bulan: number; tahun: number } {
 }
 
 /**
- * M13-US5 — rekap bulanan.
+ * M13-US5 — rekap bulanan 5 kategori.
  * Karyawan: filter baris rekap oleh karyawan_id === session.employeeId.
- * HR: tampilkan semua baris + ringkasan total.
+ * HR: tampilkan semua baris, ringkasan total, dan aksi kirim ke M14.
+ *
+ * Nama karyawan ditarik dari M12 (pull) karena rekap M13 hanya berisi
+ * karyawan_id. Bila M12 tidak dapat dihubungi, tabel tetap tampil dengan
+ * label "Karyawan #id".
  */
 export function MonthlySummaryPage({
   scope,
@@ -38,12 +53,16 @@ export function MonthlySummaryPage({
   scope: "team" | "mine";
   employeeId: string;
 }) {
+  const { push } = useToast();
   const initial = defaultBulanTahun();
   const [bulan, setBulan] = useState(initial.bulan);
   const [tahun, setTahun] = useState(initial.tahun);
   const [recap, setRecap] = useState<LiveRecap["data"] | null>(null);
+  const [employees, setEmployees] = useState<M12Employee[]>([]);
+  const [nameNotice, setNameNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
 
   const load = useCallback(async (targetBulan: number, targetTahun: number) => {
     setLoading(true);
@@ -62,21 +81,74 @@ export function MonthlySummaryPage({
     void load(bulan, tahun);
   }, [load, bulan, tahun]);
 
-  // Filter baris sesuai scope
-  const rows: RecapRow[] = (() => {
+  // PULL M12: nama karyawan untuk kolom "Karyawan".
+  useEffect(() => {
+    let alive = true;
+    void getKaryawanAktif()
+      .then((result) => {
+        if (!alive) return;
+        setEmployees(result.data);
+        if (result.error) setNameNotice(result.error);
+      })
+      .catch(() => {
+        if (alive) setNameNotice("Nama karyawan tidak dapat dimuat.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const rows: RecapViewRow[] = useMemo(() => {
     if (!recap) return [];
+    const ZERO = { hadir: 0, terlambat: 0, izin_sakit: 0, cuti: 0, alpa: 0 };
+
     if (scope === "mine") {
-      const numericId = Number(employeeId);
-      if (Number.isNaN(numericId)) return []; // HR id (mis. "hr-1") tidak punya baris rekap
-      return recap.rekap.filter((row) => row.karyawan_id === numericId);
+      return recap.rekap
+        .filter((row) => String(row.karyawan_id) === employeeId)
+        .map((row) => ({ ...row, nama: employees.find((e) => String(e.id) === employeeId)?.nama ?? `Karyawan #${row.karyawan_id}` }));
     }
-    return recap.rekap;
-  })();
+
+    // HR: seluruh karyawan aktif M12 muncul, termasuk yang belum punya presensi (0).
+    const byId = new Map(recap.rekap.map((row) => [String(row.karyawan_id), row]));
+    const roster: RecapViewRow[] = employees.map((item) => ({
+      ...ZERO,
+      ...(byId.get(String(item.id)) ?? {}),
+      karyawan_id: item.id,
+      nama: item.nama,
+    }));
+    // Sisa baris rekap yang id-nya tidak ada di M12 tetap ditampilkan (jangan sembunyikan data).
+    const orphans: RecapViewRow[] = recap.rekap
+      .filter((row) => !employees.some((item) => item.id === row.karyawan_id))
+      .map((row) => ({ ...row, nama: `Karyawan #${row.karyawan_id}` }));
+
+    return [...roster, ...orphans];
+  }, [recap, scope, employeeId, employees]);
 
   const ringkasan = recap?.ringkasan;
+  const kosong = rows.length === 0;
 
-  const columns: Column<RecapRow>[] = [
-    { key: "karyawan_id", header: "Karyawan ID", align: "right", render: (row) => <span className="tabular-nums">{row.karyawan_id}</span> },
+  async function onSendToM14() {
+    setSending(true);
+    try {
+      const result = await pushRekapKeM14(bulan, tahun);
+      push({
+        variant: result.sent ? "success" : "info",
+        title: result.sent ? "Rekap terkirim" : "Belum terkirim",
+        description: result.message,
+      });
+    } catch (caught) {
+      push({
+        variant: "danger",
+        title: "Gagal mengirim",
+        description: caught instanceof ApiError ? caught.message : "Koneksi terputus.",
+      });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const columns: Column<RecapViewRow>[] = [
+    { key: "nama", header: "Karyawan", render: (row) => <span className="text-text">{row.nama}</span> },
     { key: "hadir", header: "Hadir", align: "right", render: (row) => <span className="tabular-nums">{row.hadir}</span> },
     { key: "terlambat", header: "Terlambat", align: "right", render: (row) => <span className="tabular-nums">{row.terlambat}</span> },
     { key: "izin_sakit", header: "Izin / Sakit", align: "right", render: (row) => <span className="tabular-nums">{row.izin_sakit}</span> },
@@ -91,7 +163,6 @@ export function MonthlySummaryPage({
         title="Rekap Kehadiran"
       />
 
-      {/* Picker bulan & tahun */}
       <Card className="p-4 sm:p-5">
         <div className="flex flex-wrap items-end gap-4">
           <FormField id="rekap-bulan" label="Bulan">
@@ -121,12 +192,24 @@ export function MonthlySummaryPage({
               ))}
             </Select>
           </FormField>
+
+          {scope === "team" ? (
+            <Button
+              variant="secondary"
+              onClick={() => void onSendToM14()}
+              loading={sending}
+              loadingText="Mengirim…"
+              disabled={kosong}
+            >
+              Kirim ke Penggajian
+            </Button>
+          ) : null}
         </div>
       </Card>
 
       {error ? <Banner variant="danger" message={error} /> : null}
+      {nameNotice ? <Banner variant="info" message={nameNotice} /> : null}
 
-      {/* Tabel rekap */}
       <Table
         caption={`Rekap ${formatMonthLabel(`${tahun}-${String(bulan).padStart(2, "0")}`)}`}
         columns={columns}
@@ -134,28 +217,33 @@ export function MonthlySummaryPage({
         rowKey={(row) => String(row.karyawan_id)}
         loading={loading}
         empty={
-          scope === "mine" ? (
-            <p className="text-body text-muted">Belum ada data rekap untuk bulan ini.</p>
-          ) : (
-            <p className="text-body text-muted">Belum ada data rekap untuk periode ini.</p>
-          )
+          <p className="text-body text-muted">
+            {scope === "mine"
+              ? "Belum ada data rekap untuk bulan ini."
+              : "Belum ada data kehadiran pada periode ini."}
+          </p>
         }
       />
 
-      {/* Ringkasan total — hanya HR */}
       {scope === "team" && ringkasan && Object.keys(ringkasan).length > 0 ? (
         <Card className="p-5 sm:p-6">
           <h2 className="text-h3 text-text">Ringkasan total</h2>
-          <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
             {Object.entries(ringkasan).map(([key, value]) => (
-              <div key={key} className="flex items-center justify-between">
-                <span className="text-body text-muted">{key}</span>
-                <span className="text-body text-text tabular-nums">{value}</span>
+              <div key={key} className="rounded-lg bg-surface-2 p-3">
+                <p className="text-caption text-muted">{KATEGORI_LABEL[key] ?? key}</p>
+                <p className="mt-1 text-h3 text-text tabular-nums">{value}</p>
               </div>
             ))}
           </div>
         </Card>
       ) : null}
+
+      <p className="text-caption text-muted">
+        Rekap berisi 5 kategori sesuai dokumen studi kasus: hadir, terlambat, izin/sakit,
+        cuti, alpa. Kolom <strong>cuti</strong> baru terisi setelah data cuti dari modul
+        kepegawaian tersedia.
+      </p>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { useSearch } from "@/components/layout/search-context";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/FormField";
 import { MenuIcon, SearchIcon } from "@/components/ui/Icons";
+import { ROLE_LABEL } from "@/lib/auth/constants";
 import type { Role } from "@/lib/types";
 
 export type NavbarProps = {
@@ -61,6 +62,9 @@ export function Navbar({ userName, role, onOpenMenu }: NavbarProps) {
       ) : null}
 
       <div className="ml-auto flex items-center gap-3">
+        <span className="hidden rounded-full bg-primary-soft px-3 py-1 text-caption font-semibold text-primary sm:inline">
+          {ROLE_LABEL[role]}
+        </span>
         <AccountMenu userName={userName} role={role} />
       </div>
     </div>

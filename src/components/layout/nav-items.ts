@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { CalendarDays, CheckCircle2, Clock, History, Settings2 } from "lucide-react";
+import { CalendarDays, Clock, History, Settings2 } from "lucide-react";
 
 import type { Role } from "@/lib/types";
 
@@ -9,19 +9,21 @@ export type NavItem = {
   icon: LucideIcon;
 };
 
-/** Isi sidebar boleh berbeda antar modul (Panduan UI bagian "Boleh beda"). */
+/**
+ * Isi sidebar mengikuti Studi Kasus Capstone (M13, 5 user story):
+ * US1 pengaturan jam kerja, US2 check-in/out, US3 izin & sakit, US5 rekap.
+ *
+ * Fitur di luar SSOT (persetujuan izin HR, riwayat harian, hari libur,
+ * GPS, koreksi presensi) sengaja tidak ditampilkan.
+ */
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin_hr: [
     { href: "/kehadiran/pengaturan", label: "Pengaturan jam kerja", icon: Settings2 },
-    { href: "/kehadiran/approval", label: "Persetujuan izin & sakit", icon: CheckCircle2 },
-    { href: "/kehadiran/riwayat", label: "Riwayat kehadiran", icon: History },
     { href: "/kehadiran/rekap", label: "Rekap kehadiran", icon: CalendarDays },
   ],
   karyawan: [
     { href: "/kehadiran/hari-ini", label: "Presensi Karyawan", icon: Clock },
-    { href: "/kehadiran/rekap", label: "Riwayat & Rekap Saya", icon: History },
     { href: "/kehadiran/izin", label: "Izin & Sakit", icon: CalendarDays },
+    { href: "/kehadiran/rekap", label: "Rekap Saya", icon: History },
   ],
 };
-
-export const MODULE_NAME = "Kehadiran";

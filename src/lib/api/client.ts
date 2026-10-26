@@ -41,6 +41,8 @@ export function apiUrl(path: string): string {
 export async function request<T>(
   path: string,
   init?: RequestInit,
+  /** local: true → panggil route handler FE sendiri (same-origin), bukan BE. */
+  options?: { local?: boolean },
 ): Promise<T> {
   let response: Response;
   try {
@@ -53,7 +55,7 @@ export async function request<T>(
       ...headerInit,
     };
     if (employeeId) headers["X-Employee-Id"] = employeeId;
-    response = await fetch(apiUrl(path), {
+    response = await fetch(options?.local ? path : apiUrl(path), {
       ...init,
       headers,
       body: init?.body,

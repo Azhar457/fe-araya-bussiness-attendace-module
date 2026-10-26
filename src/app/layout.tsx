@@ -6,7 +6,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Kehadiran · Araya Business Hub",
-  description: "Modul M13 Kehadiran — Araya Business Hub Platform (Kel. C4)",
+  description: "Modul Kehadiran — Araya Business Hub Platform",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -64,12 +64,17 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
 
   async function punch() {
     const attendance = today?.attendance;
-    const action = attendance?.checkInAt && !attendance.checkOutAt ? checkOut : checkIn;
+    const isCheckOut = Boolean(attendance?.checkInAt && !attendance.checkOutAt);
+    const action = isCheckOut ? checkOut : checkIn;
     setPunching(true);
     try {
-      const result = await action();
+      await action();
       notifyAttendanceChanged();
-      push({ variant: "success", title: "Presensi berhasil", description: result.message });
+      push({
+        variant: "success",
+        title: "Presensi berhasil",
+        description: isCheckOut ? "Check-out hari ini tercatat." : "Check-in hari ini tercatat.",
+      });
       await load();
     } catch (caught) {
       notifyAttendanceChanged();
@@ -163,7 +168,7 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
             {greeting}, {employeeName}
           </p>
           <p className="text-body text-muted">
-            Karyawan • Kehadiran M13 • {formatDateLong(today.date)}
+            Karyawan • Kehadiran • {formatDateLong(today.date)}
           </p>
           {today.isWorkday ? (
             <Badge tone={pillTone}>{pillText}</Badge>

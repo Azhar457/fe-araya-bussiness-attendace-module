@@ -1,20 +1,23 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { EMPLOYEE_COOKIE, homeFor } from "@/lib/auth/constants";
+import {
+  EMPLOYEE_COOKIE,
+  NAME_COOKIE,
+  ROLE_COOKIE,
+  homeFor,
+} from "@/lib/auth/constants";
 import type { LiveSession, Role } from "@/lib/types";
 
-// Peta id cookie → label identitas demo (BE live tidak punya /api/me).
-const IDENTITIES: Array<{ id: string; name: string; role: Role }> = [
-  { id: "101", name: "Dimas Pratama", role: "karyawan" },
-  { id: "102", name: "Sinta Maharani", role: "karyawan" },
-  { id: "hr-1", name: "Rani Kusumawati", role: "admin_hr" },
-];
-
+/**
+ * Sesi dibaca dari cookie yang diset halaman /masuk.
+ * BE live tidak punya `GET /api/me`, jadi nama & peran ikut disimpan di cookie.
+ */
 export async function getSession(): Promise<LiveSession> {
   const jar = await cookies();
-  const id = jar.get(EMPLOYEE_COOKIE)?.value ?? "";
-  const found = IDENTITIES.find((item) => item.id === id) ?? { id, name: `Karyawan #${id || "?"}`, role: "karyawan" as Role };
-  return { employeeId: found.id, name: found.name, role: found.role };
+  const employeeId = jar.get(EMPLOYEE_COOKIE)?.value ?? "";
+  const role: Role = jar.get(ROLE_COOKIE)?.value === "admin_hr" ? "admin_hr" : "karyawan";
+  const name = jar.get(NAME_COOKIE)?.value || `Karyawan #${employeeId || "?"}`;
+  return { employeeId, name, role };
 }
 
 export async function requireSession(): Promise<LiveSession> {

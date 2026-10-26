@@ -1,10 +1,10 @@
 import type { ButtonHTMLAttributes, ComponentPropsWithRef, ReactNode } from "react";
 
 const VARIANTS = {
-  primary: "bg-primary text-on-primary hover:bg-primary-hover",
-  secondary: "bg-surface border-line-strong text-text hover:bg-surface-2",
-  tertiary: "text-primary hover:bg-primary-soft",
-  danger: "bg-danger-action text-on-danger-action",
+  primary: "border-transparent bg-primary text-on-primary hover:bg-primary-hover",
+  secondary: "border-line-strong bg-surface text-text hover:bg-surface-2",
+  tertiary: "border-transparent text-primary hover:bg-primary-soft",
+  danger: "border-transparent bg-danger-action text-on-danger-action",
 } as const;
 
 const SIZES = {
@@ -40,7 +40,7 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={[
-        "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-sm border border-transparent text-label transition-colors",
+        "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-sm border text-label transition-colors",
         VARIANTS[variant],
         SIZES[size],
         "disabled:cursor-not-allowed disabled:border-transparent disabled:bg-surface-2 disabled:text-muted",

@@ -47,11 +47,12 @@ export type LiveToday = {
   attendance: LiveTodayAttendance | null;
 };
 
-/** POST /api/attendance/check-in → 201 */
-export type LiveCheckInResult = {
-  message: string;
-  data: { tanggal: string; jam: string; status: string };
-};
+/**
+ * POST /api/attendance/check-in → 201 dan check-out → 200.
+ * BE live mengembalikan baris presensi langsung, BUKAN { message, data }.
+ * Sudah diverifikasi 26/10/2026.
+ */
+export type LiveCheckInResult = LiveTodayAttendance;
 
 /** GET /api/attendance/recap */
 export type LiveRecap = {
@@ -89,6 +90,34 @@ export type LiveLeaveList = {
     status?: string;
     karyawan_id?: number;
   }>;
+};
+
+/* ================================================================== */
+/* Kontrak M12 (Kel. C3) — ditarik lewat proxy FE karena M12 tidak     */
+/* mengirim header CORS. Lihat Kontrak_M13_ke_M12.md.                  */
+/* ================================================================== */
+
+export type M12Employee = {
+  id: number;
+  nik: string;
+  nama: string;
+  jabatan: string;
+  divisi: string;
+  status_kerja: string;
+};
+
+/** GET /api/m12/karyawan-aktif (proxy) */
+export type M12EmployeeList = {
+  data: M12Employee[];
+  /** terisi bila M12 tidak dapat dihubungi; data kosong, bukan error fatal. */
+  error?: string;
+};
+
+/** POST /api/m14/rekap (proxy) — hasil kirim rekap ke M14. */
+export type M14PushResult = {
+  sent: boolean;
+  message: string;
+  detail?: unknown;
 };
 
 /** Akun untuk halaman masuk. Hanya ada di mode mock sampai BE menetapkan SSO/token. */

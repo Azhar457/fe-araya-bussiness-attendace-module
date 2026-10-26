@@ -18,9 +18,19 @@ export function WorkSettingsForm() {
   const [jamPulang, setJamPulang] = useState("17:00");
   const [toleransi, setToleransi] = useState(15);
   const [saving, setSaving] = useState(false);
+  const [jamPulangError, setJamPulangError] = useState<string | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // AC M13-US1 #2: jam pulang lebih awal dari jam masuk harus ditolak.
+    // BE juga menolak (HTTP 400), tapi dicek di sini supaya tidak tampak seperti error server.
+    if (jamPulang <= jamMasuk) {
+      setJamPulangError("Jam pulang harus lebih lambat dari jam masuk.");
+      return;
+    }
+    setJamPulangError(null);
+
     setSaving(true);
     try {
       const result = await saveWorkingHours({
@@ -49,7 +59,7 @@ export function WorkSettingsForm() {
 
       <Banner
         variant="info"
-        message="Aturan tidak dapat dimuat (endpoint GET belum ada); isi nilai baru lalu simpan."
+        message="Masukkan aturan baru lalu simpan. Aturan yang sedang berlaku belum dapat ditampilkan karena BE belum menyediakan endpoint baca."
       />
 
       <Card className="p-5 sm:p-6">
@@ -64,12 +74,16 @@ export function WorkSettingsForm() {
               />
             </FormField>
 
-            <FormField id="jam-pulang" label="Jam pulang" required>
+            <FormField id="jam-pulang" label="Jam pulang" required error={jamPulangError ?? undefined}>
               <Input
                 id="jam-pulang"
                 type="time"
                 value={jamPulang}
-                onChange={(event) => setJamPulang(event.target.value)}
+                aria-invalid={Boolean(jamPulangError) || undefined}
+                onChange={(event) => {
+                  setJamPulang(event.target.value);
+                  setJamPulangError(null);
+                }}
               />
             </FormField>
 

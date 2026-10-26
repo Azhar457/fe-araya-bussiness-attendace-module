@@ -21,6 +21,8 @@ import type {
   LiveSession,
   LiveToday,
   LiveWorkingHoursResult,
+  M12EmployeeList,
+  M14PushResult,
 } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
@@ -120,3 +122,23 @@ export function getRecap(bulan: number, tahun: number): Promise<LiveRecap> {
     `/api/attendance/recap?bulan=${encodeURIComponent(String(bulan))}&tahun=${encodeURIComponent(String(tahun))}`,
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Integrasi antar modul — lewat route handler FE sendiri (same-origin)*/
+/* karena M12 tidak mengirim header CORS dan M14 belum punya endpoint. */
+/* ------------------------------------------------------------------ */
+
+/** PULL M12: daftar karyawan aktif (dipakai /masuk + nama pada rekap). */
+export function getKaryawanAktif(): Promise<M12EmployeeList> {
+  return request<M12EmployeeList>("/api/m12/karyawan-aktif", undefined, { local: true });
+}
+
+/** PUSH M14: kirim rekap bulan terpilih ke endpoint M14. */
+export function pushRekapKeM14(bulan: number, tahun: number): Promise<M14PushResult> {
+  return request<M14PushResult>(
+    "/api/m14/rekap",
+    { method: "POST", body: JSON.stringify({ bulan, tahun }) },
+    { local: true },
+  );
+}
+
