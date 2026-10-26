@@ -14,11 +14,27 @@ export type Session = {
   role: Role;
 };
 
-/** Sesi identitas untuk mode BE asli: id numerik (header X-Employee-Id) + peran + label. */
+/** Sesi hasil login BE (POST /api/auth/login) / sesi aktif (GET /api/auth/me). */
 export type LiveSession = {
-  employeeId: string; // numerik, dikirim sebagai header X-Employee-Id
+  employeeId: string; // karyawanId numerik dari token
+  nik?: string;
   name: string;
   role: Role;
+};
+
+/** POST /api/auth/login */
+export type LiveLoginResult = {
+  token: string;
+  tokenType: "Bearer";
+  expiresIn: number;
+  user: {
+    karyawanId: number;
+    nik: string;
+    nama: string;
+    role: Role;
+    jabatan: string | null;
+    divisi: string | null;
+  };
 };
 /* ================================================================== */
 /* Bentuk wire BE LIVE (laboratorium-backend.vercel.app)               */
@@ -62,6 +78,8 @@ export type LiveRecap = {
     periode: { bulan: number; tahun: number };
     rekap: Array<{
       karyawan_id: number;
+      nama?: string | null;
+      nik?: string | null;
       hadir: number;
       terlambat: number;
       izin_sakit: number;

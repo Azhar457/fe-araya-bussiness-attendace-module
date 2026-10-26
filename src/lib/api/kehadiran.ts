@@ -1,24 +1,28 @@
 /**
  * API layer — BE LIVE (laboratorium-backend.vercel.app).
  *
- * Hanya memanggil endpoint yang benar-benar ada di BE deployed:
- *  - GET  /api/attendance/today        (header X-Employee-Id)
- *  - POST /api/attendance/check-in     (header X-Employee-Id)
- *  - POST /api/attendance/check-out    (header X-Employee-Id)
- *  - GET  /api/leave-permissions       (header X-Employee-Id)
- *  - POST /api/leave-permissions       (header X-Employee-Id)
+ * Semua endpoint terproteksi memakai `Authorization: Bearer <token>` dari
+ * POST /api/auth/login. Header `X-Employee-Id` sudah tidak dikirim FE.
+ *
+ *  - POST /api/auth/login             (NIK + password)
+ *  - POST /api/auth/logout
+ *  - GET  /api/attendance/today
+ *  - POST /api/attendance/check-in
+ *  - POST /api/attendance/check-out
+ *  - GET  /api/leave-permissions
+ *  - POST /api/leave-permissions
  *  - GET  /api/attendance/recap?bulan=&tahun=
- *  - POST /api/working-hours           (HR)
+ *  - POST /api/working-hours          (Admin HR)
  *
  * Semua data mock (`src/mocks/**`) sudah dihapus.
  */
-import { ApiError, request } from "@/lib/api/client";
+import { request } from "@/lib/api/client";
 import type {
   LiveCheckInResult,
   LiveLeaveList,
   LiveLeaveResult,
+  LiveLoginResult,
   LiveRecap,
-  LiveSession,
   LiveToday,
   LiveWorkingHoursResult,
   M12EmployeeList,
@@ -26,24 +30,20 @@ import type {
 } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
-/* Sesi / identitas (mode BE: tidak ada endpoint /me di BE live;       */
-/* identitas disimpan di cookie oleh halaman /masuk, dibaca client).   */
+/* Autentikasi                                                        */
 /* ------------------------------------------------------------------ */
 
-/**
- * BE live tidak menyediakan `GET /api/me`. Identitas (numeric X-Employee-Id +
- * label) disimpan oleh halaman /masuk ke cookie sesi dan dibaca di client.
- * Fungsi ini hanya dipakai server-side untuk guard; di BE mode ia melempar
- * jelas agar tidak diandalkan.
- */
-export function getSession(_signal?: AbortSignal): Promise<LiveSession> {
-  return Promise.reject(
-    new ApiError(
-      0,
-      "NO_SESSION",
-      "Modus BE asli tidak memiliki endpoint sesi; identitas diambil dari cookie oleh client.",
-    ),
-  );
+/** POST /api/auth/login — identitas dan peran ditentukan BE, bukan pengguna. */
+export function login(nik: string, password: string): Promise<LiveLoginResult> {
+  return request<LiveLoginResult>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ nik, password }),
+  });
+}
+
+/** POST /api/auth/logout — token dicabut di sisi BE (tabel revoked_tokens). */
+export function logout(): Promise<{ message: string }> {
+  return request<{ message: string }>("/api/auth/logout", { method: "POST", body: "{}" });
 }
 
 /* ------------------------------------------------------------------ */
@@ -94,18 +94,17 @@ export function checkOut(): Promise<LiveCheckInResult> {
 /* ------------------------------------------------------------------ */
 
 export type LeaveInput = {
-  karyawan_id: number; // di body (BEx deployed: `POST` baca `karyawan_id` dari JSON, bukan header)
   tanggal: string; // YYYY-MM-DD
   jenis: "izin" | "sakit";
   alasan: string;
 };
 
-/** GET /api/leave-permissions — daftar milik karyawan (header X-Employee-Id). */
+/** GET /api/leave-permissions — daftar milik pemilik token. */
 export function listLeaves(): Promise<LiveLeaveList> {
   return request<LiveLeaveList>("/api/leave-permissions");
 }
 
-/** POST /api/leave-permissions — ajukan izin/sakit (`karyawan_id` di body). */
+/** POST /api/leave-permissions — ajukan izin/sakit (identitas dari token). */
 export function submitLeave(input: LeaveInput): Promise<LiveLeaveResult> {
   return request<LiveLeaveResult>("/api/leave-permissions", {
     method: "POST",

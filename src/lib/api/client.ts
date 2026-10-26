@@ -1,5 +1,5 @@
 import type { ApiErrorBody } from "@/lib/types";
-import { EMPLOYEE_COOKIE } from "@/lib/auth/constants";
+import { TOKEN_COOKIE } from "@/lib/auth/constants";
 
 /**
  * API client — mode BE asli (laboratorium-backend.vercel.app).
@@ -7,13 +7,13 @@ import { EMPLOYEE_COOKIE } from "@/lib/auth/constants";
  */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 
-/** Baca id karyawan numerik dari cookie sesi (di-set halaman /masuk). */
-function readEmployeeCookie(): string {
+/** Baca token Bearer dari cookie sesi (di-set halaman /masuk setelah login BE). */
+function readTokenCookie(): string {
   if (typeof document === "undefined") return "";
   const match = document.cookie
     .split("; ")
-    .find((row) => row.startsWith(`${EMPLOYEE_COOKIE}=`));
-  return match ? match.split("=").slice(1).join("=") : "";
+    .find((row) => row.startsWith(`${TOKEN_COOKIE}=`));
+  return match ? decodeURIComponent(match.split("=").slice(1).join("=")) : "";
 }
 
 export class ApiError extends Error {
@@ -46,7 +46,7 @@ export async function request<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    const employeeId = readEmployeeCookie();
+    const token = readTokenCookie();
     const headerInit = init?.headers
       ? Object.fromEntries(new Headers(init.headers).entries())
       : {};
@@ -54,7 +54,7 @@ export async function request<T>(
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...headerInit,
     };
-    if (employeeId) headers["X-Employee-Id"] = employeeId;
+    if (token) headers.Authorization = `Bearer ${token}`;
     response = await fetch(options?.local ? path : apiUrl(path), {
       ...init,
       headers,
