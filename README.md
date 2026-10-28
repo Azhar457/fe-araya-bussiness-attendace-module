@@ -160,7 +160,25 @@ Guard peran ada di layout server: halaman `admin_hr` mengalihkan karyawan ke
 
 ---
 
-## 7. Alur demo yang disarankan
+## 7. Alur demo
+
+## 7.1 Akses demo cepat (tanpa login)
+
+Untuk showcase / demo tanpa nunggu login M12/M13 sehat:
+
+- `GET /user` → masuk sebagai **Karyawan** (employeeId 101, demo `Dimas Pratama`).
+- `GET /hr` → masuk sebagai **Admin HR** (employeeId 1, demo `Rani`).
+
+Mekanisme: route server set cookie demo `araya_demo`, session layer membaca
+identitas statis (Bukan BE), dan semua panggilan BE M13 memakai fallback
+header `X-Employee-Id`. Ini jalan meski login M12 (Kel. C3) atau M13
+(ikmal) sedang bermasalah, karena BE M13 sudah support `X-Employee-Id`
+sebagai fallback identitas.
+
+Kapan pakai: dosen/penguji tinggal buka `/user` atau `/hr` di browser.
+`/masuk` (login M12 asli) tetap tersedia di bawah tombol demo.
+
+### Alur demo yang disarankan
 
 1. **Admin HR** masuk → `/kehadiran/pengaturan` → ubah jam masuk/pulang & toleransi → simpan.
    Coba juga isi jam pulang lebih awal dari jam masuk → ditolak (AC US1 #2).

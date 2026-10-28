@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   let recap: unknown;
   try {
     const response = await fetch(
-      `${M13_BASE}/api/attendance/recap?bulan=${bulan}&tahun=${tahun}`,
+      `${M13_BASE}/api/attendance/recap?month=${tahun}-${String(bulan).padStart(2, "0")}`,
       { cache: "no-store", headers: { Accept: "application/json" } },
     );
     if (!response.ok) {

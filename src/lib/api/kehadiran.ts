@@ -1,20 +1,26 @@
 /**
- * API layer — BE LIVE (laboratorium-backend.vercel.app).
+ * API layer — M12 (Kel. C3) untuk auth + karyawan, M13 (BE live) untuk presensi.
  *
- * Semua endpoint terproteksi memakai `Authorization: Bearer <token>` dari
- * POST /api/auth/login. Header `X-Employee-Id` sudah tidak dikirim FE.
+ * Keputusan ERP: M12 = satu-satunya sumber login, identitas, dan role.
+ * M13 tidak lagi issue auth token. Semua endpoint proteksi M13 menerima
+ * Bearer token M12.
  *
- *  - POST /api/auth/login             (NIK + password)
- *  - POST /api/auth/logout
- *  - GET  /api/attendance/today
- *  - POST /api/attendance/check-in
- *  - POST /api/attendance/check-out
- *  - GET  /api/leave-permissions
- *  - POST /api/leave-permissions
- *  - GET  /api/attendance/recap?bulan=&tahun=
- *  - POST /api/working-hours          (Admin HR)
+ * Endpoint M13 (presensi, ke NEXT_PUBLIC_API_BASE_URL = laboratorium-backend):
+ *   - POST /api/working-hours          (Admin HR)
+ *   - GET  /api/attendance/today
+ *   - POST /api/attendance/check-in
+ *   - POST /api/attendance/check-out
+ *   - GET  /api/leave-permissions
+ *   - POST /api/leave-permissions
+ *   - GET  /api/attendance/recap?bulan=&tahun=
  *
- * Semua data mock (`src/mocks/**`) sudah dihapus.
+ * Endpoint M12 (auth + karyawan aktif, via proxy same-origin karena M12 tidak
+ * mengirim CORS — lihat `src/app/api/m12/*`):
+ *   - POST /api/m12/auth/login    → M12 POST /api/login
+ *   - GET  /api/m12/auth/me       → M12 GET  /api/me
+ *   - POST /api/m12/auth/logout   → M12 POST /api/logout
+ *   - GET  /api/m12/karyawan-aktif → M12 GET /api/karyawan/aktif (HANYA HR)
+ *
  */
 import { request } from "@/lib/api/client";
 import type {
@@ -24,26 +30,44 @@ import type {
   LiveLoginResult,
   LiveRecap,
   LiveToday,
+  LiveWorkingHours,
   LiveWorkingHoursResult,
   M12EmployeeList,
+  M12Session,
   M14PushResult,
 } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
-/* Autentikasi                                                        */
+/* Autentikasi — SEKARANG MENYATU DI M12 (Kel. C3)                    */
 /* ------------------------------------------------------------------ */
 
-/** POST /api/auth/login — identitas dan peran ditentukan BE, bukan pengguna. */
-export function login(nik: string, password: string): Promise<LiveLoginResult> {
-  return request<LiveLoginResult>("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ nik, password }),
-  });
+/**
+ * POST /api/m12/auth/login (proxy same-origin → M12 POST /api/login).
+ * Satu-satunya entry point login di ERP; identitas & role berasal M12.
+ */
+export function login(email: string, password: string): Promise<LiveLoginResult> {
+  return request<LiveLoginResult>(
+    "/api/m12/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    },
+    { local: true },
+  );
 }
 
-/** POST /api/auth/logout — token dicabut di sisi BE (tabel revoked_tokens). */
+/** POST /api/m12/auth/logout — token dicabut di sisi M12. */
 export function logout(): Promise<{ message: string }> {
-  return request<{ message: string }>("/api/auth/logout", { method: "POST", body: "{}" });
+  return request<{ message: string }>(
+    "/api/m12/auth/logout",
+    { method: "POST", body: "{}" },
+    { local: true },
+  );
+}
+
+/** GET /api/m12/auth/me — profil + role + data diri Karyawan. */
+export function getMe(): Promise<M12Session> {
+  return request<M12Session>("/api/m12/auth/me", undefined, { local: true });
 }
 
 /* ------------------------------------------------------------------ */
@@ -56,6 +80,10 @@ export type WorkingHoursInput = {
   toleransi_keterlambatan: number; // menit
 };
 
+/** GET /api/working-hours (public) — aturan saat ini, untuk prefill form HR. */
+export function getWorkingHours(): Promise<LiveWorkingHours> {
+  return request<LiveWorkingHours>("/api/working-hours");
+}
 /** POST /api/working-hours (HR) — upsert aturan global (id=1). */
 export function saveWorkingHours(input: WorkingHoursInput): Promise<LiveWorkingHoursResult> {
   return request<LiveWorkingHoursResult>("/api/working-hours", {
@@ -73,7 +101,7 @@ export function getToday(): Promise<LiveToday> {
   return request<LiveToday>("/api/attendance/today");
 }
 
-/** POST /api/attendance/check-in (SA v0.2 — identitas dari header X-Employee-Id). */
+/** POST /api/attendance/check-in */
 export function checkIn(): Promise<LiveCheckInResult> {
   return request<LiveCheckInResult>("/api/attendance/check-in", {
     method: "POST",
@@ -118,16 +146,15 @@ export function submitLeave(input: LeaveInput): Promise<LiveLeaveResult> {
 
 export function getRecap(bulan: number, tahun: number): Promise<LiveRecap> {
   return request<LiveRecap>(
-    `/api/attendance/recap?bulan=${encodeURIComponent(String(bulan))}&tahun=${encodeURIComponent(String(tahun))}`,
+    `/api/attendance/recap?month=${tahun}-${String(bulan).padStart(2, "0")}`,
   );
 }
 
 /* ------------------------------------------------------------------ */
 /* Integrasi antar modul — lewat route handler FE sendiri (same-origin)*/
-/* karena M12 tidak mengirim header CORS dan M14 belum punya endpoint. */
 /* ------------------------------------------------------------------ */
 
-/** PULL M12: daftar karyawan aktif (dipakai /masuk + nama pada rekap). */
+/** PULL M12: daftar karyawan aktif (HANYA HR; dipakai rekap Admin HR). */
 export function getKaryawanAktif(): Promise<M12EmployeeList> {
   return request<M12EmployeeList>("/api/m12/karyawan-aktif", undefined, { local: true });
 }
@@ -140,4 +167,3 @@ export function pushRekapKeM14(bulan: number, tahun: number): Promise<M14PushRes
     { local: true },
   );
 }
-

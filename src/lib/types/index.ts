@@ -14,26 +14,98 @@ export type Session = {
   role: Role;
 };
 
-/** Sesi hasil login BE (POST /api/auth/login) / sesi aktif (GET /api/auth/me). */
-export type LiveSession = {
-  employeeId: string; // karyawanId numerik dari token
-  nik?: string;
+/**
+ * Respons M12 `GET /api/me` — profil + role + employee milik user login.
+ * Nilai top-level: id, employee_id, user_id, nama/name, email, jabatan,
+ * divisi, nik, status_kerja, role.
+ *
+ * `role` dari M12: "Admin HR" | "Employee". FE M13 menormalisasi ke
+ * `Role` (admin_hr | karyawan) di `src/lib/auth/session.ts` (`normalizeRole`).
+ */
+export type M12Session = {
+  success: boolean;
+  id: number;
+  employee_id: number;
+  user_id: number;
+  nama: string;
   name: string;
-  role: Role;
+  email: string;
+  jabatan: string;
+  divisi: string;
+  nik: string;
+  status_kerja: string;
+  /** "Admin HR" | "Employee" — label tampilan dari M12. */
+  role: string;
+  data?: {
+    id: number;
+    user_id: number;
+    employee_id: number;
+    name: string;
+    nama: string;
+    email: string;
+    role: string;
+    role_code: string;
+    nik: string;
+    jabatan?: string;
+    divisi?: string;
+    status_kerja?: string;
+    employee?: {
+      id: number;
+      nik: string;
+      nama: string;
+      jabatan: string;
+      divisi: string;
+      status_kerja: string;
+      tanggal_berhenti: string | null;
+    };
+  };
 };
 
-/** POST /api/auth/login */
+/**
+ * Respons M12 `POST /api/login` (Kel. C3) — satu-satunya sumber login +
+ * identitas + role di ERP (lihat CONFIRMATION_TO_M12.md §2).
+ *
+ * Top-level: { success, message, token, role, employee_id, name, nik, data }.
+ * `role`: "Admin HR" | "Employee"; `role_code`: "hr" | "karyawan".
+ * Token M12 dipakai di semua endpoint M13 (shared Neon `neondb`).
+ */
 export type LiveLoginResult = {
+  success: boolean;
+  message: string;
+  /** Bearer token M12 — disimpan di cookie `araya_token` oleh FE M13. */
   token: string;
-  tokenType: "Bearer";
-  expiresIn: number;
-  user: {
-    karyawanId: number;
+  /** "Admin HR" | "Employee". */
+  role: string;
+  /** Id numerik karyawan M12 (dipakai M13 di semua endpoint presensi). */
+  employee_id: number;
+  name: string;
+  nik: string;
+  data?: {
+    token: string;
+    token_type: string;
+    role: string;
+    employee_id: number;
+    name: string;
     nik: string;
-    nama: string;
-    role: Role;
-    jabatan: string | null;
-    divisi: string | null;
+    user?: {
+      id: number;
+      name: string;
+      email: string;
+      role: string;
+      /** "hr" | "karyawan" */
+      role_code: string;
+      employee_id: number;
+      nik: string;
+      employee?: {
+        id: number;
+        nik: string;
+        nama: string;
+        jabatan: string;
+        divisi: string;
+        status_kerja: string;
+        tanggal_berhenti: string | null;
+      };
+    };
   };
 };
 /* ================================================================== */
@@ -90,11 +162,20 @@ export type LiveRecap = {
   };
 };
 
-/** POST /api/working-hours → 200 */
-export type LiveWorkingHoursResult = { message: string };
+/** GET /api/working-hours → aturan jam kerja saat ini (BE live, camelCase). */
+export type LiveWorkingHours = {
+  id: number;
+  workStart: string; // "08:00:00"
+  workEnd: string; // "17:00:00"
+  lateToleranceMinutes: number;
+  timezone?: string;
+};
 
-/** POST /api/leave-permissions → 201/200 */
-export type LiveLeaveResult = { message: string; data?: unknown };
+/** POST /api/working-hours → 200 (respon = aturan baru tersimpan). */
+export type LiveWorkingHoursResult = LiveWorkingHours & { message: string };
+
+/** POST /api/leave-permissions → 201 */
+export type LiveLeaveResult = { message: string };
 
 /** GET /api/leave-permissions → { success, data: [] } */
 export type LiveLeaveList = {

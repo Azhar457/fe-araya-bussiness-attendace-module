@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { logout } from "@/lib/api/kehadiran";
-import { ROLE_LABEL, TOKEN_COOKIE } from "@/lib/auth/constants";
+import { DEMO_COOKIE, ROLE_LABEL, TOKEN_COOKIE } from "@/lib/auth/constants";
 import type { Role } from "@/lib/types";
 
 /** Menu akun di kanan navbar (Panduan UI 4 · Kerangka halaman). */
@@ -35,6 +35,7 @@ export function AccountMenu({ userName, role }: { userName: string; role: Role }
     // Cabut token di BE; cookie tetap dihapus walau panggilan gagal.
     logout().catch(() => undefined);
     document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0`;
+    document.cookie = `${DEMO_COOKIE}=; path=/; max-age=0`;
     router.push("/masuk");
     router.refresh();
   }

@@ -1,6 +1,5 @@
 "use client";
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +8,7 @@ import { FormField, Input } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/client";
-import { saveWorkingHours } from "@/lib/api/kehadiran";
+import { getWorkingHours, saveWorkingHours } from "@/lib/api/kehadiran";
 
 /** M13-US1 — HR: set aturan jam kerja global via POST /api/working-hours. */
 export function WorkSettingsForm() {
@@ -19,6 +18,17 @@ export function WorkSettingsForm() {
   const [toleransi, setToleransi] = useState(15);
   const [saving, setSaving] = useState(false);
   const [jamPulangError, setJamPulangError] = useState<string | null>(null);
+  // Prefill dari BE live (GET /api/working-hours) bila sudah ada aturan;
+  // jika belum (404) pakai default 08:00/17:00/15.
+  useEffect(() => {
+    getWorkingHours()
+      .then((rule) => {
+        if (rule?.workStart) setJamMasuk(rule.workStart.slice(0, 5));
+        if (rule?.workEnd) setJamPulang(rule.workEnd.slice(0, 5));
+        if (typeof rule?.lateToleranceMinutes === "number") setToleransi(rule.lateToleranceMinutes);
+      })
+      .catch(() => undefined);
+  }, []);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

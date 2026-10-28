@@ -22,7 +22,7 @@ const EMPTY: LeaveInput = { tanggal: "", jenis: "izin", alasan: "" };
  * M13-US3 — form pengajuan izin/sakit (karyawan) + riwayat singkat di bawah.
  * Data 100% dari BE LIVE: listLeaves (GET) + submitLeave (POST /api/leave-permissions).
  */
-export function AbsenceFormPage({ employeeId }: { employeeId: string }) {
+export function AbsenceFormPage() {
   const { push } = useToast();
   const [form, setForm] = useState<LeaveInput>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof LeaveInput, string>>>({});
