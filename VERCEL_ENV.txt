@@ -1,0 +1,6 @@
+# Vercel env untuk deploy FE M13 (modul kehadiran)
+
+NEXT_PUBLIC_API_BASE_URL=https://laboratorium-backend.vercel.app
+M12_API_BASE_URL=https://kelompok4-m12-sistem-hr-manajemen-d.vercel.app
+M14_RECAP_ENDPOINT=
+NEXT_PUBLIC_USE_MOCK=false

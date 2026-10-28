@@ -1,0 +1,13 @@
+# Vercel env untuk deploy BE M13 (laboratorium-backend) — minta Ikmal set
+
+# MUTLAK PENTING (blok login nik+password: tanpa ini POST /api/auth/login = 500)
+# Pakai string acak ≥ 32 char, mis. dari `openssl rand -hex 32`
+JWT_SECRET=<set-di-Vercel, jangan commit nilai aslinya>
+
+# Neon Postgres (sudah ada, pastikan tetap terisi)
+DATABASE_URL=< connectionString Neon >
+
+# Kunci seeder (opsional, untuk /api/seed)
+SEED_KEY=<opsional>
+
+# ALLOW_NON_WORKDAY=true  (opsional, izinkan check-in di non-hari-kerja utk demo)
