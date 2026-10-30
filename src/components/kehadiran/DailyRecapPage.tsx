@@ -11,14 +11,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Table, type Column } from "@/components/ui/Table";
 import { ApiError } from "@/lib/api/client";
 import { getDailyRecap } from "@/lib/api/kehadiran";
-import { currentMonth, formatDate, formatMonthLabel, formatTime } from "@/lib/format";
+import { currentMonth, formatDate, formatMonthLabel, formatTime, lastMonths } from "@/lib/format";
 import type { M13DailyRecap } from "@/lib/types";
 
-const BULAN_LIST = Array.from({ length: 12 }, (_, i) => {
-  const m = new Date();
-  m.setMonth(m.getMonth() - i);
-  return `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`;
-});
+const BULAN_LIST = lastMonths();
 
 function timeOfDay(input: string | null): string {
   if (!input) return "—";

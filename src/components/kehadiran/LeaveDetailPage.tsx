@@ -11,17 +11,13 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Table, type Column } from "@/components/ui/Table";
 import { ApiError } from "@/lib/api/client";
 import { listLeavesMonth } from "@/lib/api/kehadiran";
-import { currentMonth, formatDate, formatDateLong, formatMonthLabel } from "@/lib/format";
+import { currentMonth, formatDate, formatDateLong, formatMonthLabel, lastMonths } from "@/lib/format";
 import type { LiveLeaveList } from "@/lib/types";
 
 type LeaveRow = LiveLeaveList["data"][number];
 type LeaveDetail = LeaveRow & { createdAt?: string };
 
-const BULAN_LIST = Array.from({ length: 12 }, (_, i) => {
-  const m = new Date();
-  m.setMonth(m.getMonth() - i);
-  return `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`;
-});
+const BULAN_LIST = lastMonths();
 
 /**
  * M13-US3 — Detail Perizinan (karyawan).

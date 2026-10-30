@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { TOKEN_COOKIE, homeFor } from "@/lib/auth/constants";
-import { getM12Me, normalizeRole } from "@/lib/api/kehadiran";
+import { normalizeRole, type M12MeResponse } from "@/lib/api/kehadiran";
 import type { Role } from "@/lib/types";
 
 /**
@@ -21,6 +21,27 @@ import type { Role } from "@/lib/types";
  * dialihkan ke `/masuk`.
  */
 
+async function m12MeDirect(token: string) {
+  const m12Base = (
+    process.env.M12_API_BASE_URL ?? "https://kelompok4-m12-sistem-hr-manajemen-d.vercel.app"
+  ).replace(/\/+$/, "");
+  const res = await fetch(`${m12Base}/api/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+  const text = await res.text();
+  let body: unknown;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = { error: text || `M12 /api/me membalas HTTP ${res.status}` };
+  }
+  return { ok: res.ok, body } as { ok: boolean; body: M12MeResponse | Record<string, string> | null };
+}
+
 export async function getSession(): Promise<
   | {
       employeeId: string;
@@ -35,8 +56,10 @@ export async function getSession(): Promise<
   if (!token) return null;
 
   try {
-    const me = await getM12Me();
-    if (!me.success || me.employee_id == null) return null;
+    const { ok, body } = await m12MeDirect(token);
+    if (!ok || !body || typeof body === "string") return null;
+    const me = body as M12MeResponse;
+    if (!("success" in me) || me.success === false || me.employee_id == null) return null;
     return {
       employeeId: String(me.employee_id),
       nik: me.nik ?? "",

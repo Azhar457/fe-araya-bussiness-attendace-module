@@ -98,6 +98,15 @@ export function currentMonth(): string {
   const get = (t: Intl.DateTimeFormatPartTypes) => p.find((x) => x.type === t)?.value ?? "";
   return `${get("year")}-${get("month")}`;
 }
+/** 12 bulan terakhir sebagai "YYYY-MM" (aritmatis, tanpa overflow Date.setMonth). */
+export function lastMonths(): string[] {
+  const now = new Date();
+  const total = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  return Array.from({ length: 12 }, (_, i) => {
+    const t = total - i;
+    return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, "0")}`;
+  });
+}
 
 /** "2026-10" → { from: "2026-10-01", to: "2026-10-31" } */
 export function monthRange(month: string): { from: string; to: string } {

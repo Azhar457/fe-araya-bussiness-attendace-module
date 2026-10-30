@@ -61,7 +61,6 @@ export function LoginPage() {
       <Card className="w-full max-w-form">
         <div className="bg-primary px-6 py-5">
           <h1 className="text-h1 text-on-primary">Araya Business Hub</h1>
-          <p className="text-body text-on-primary/70">Modul Kehadiran</p>
         </div>
 
         <div className="flex flex-col gap-5 p-5 sm:p-6">
@@ -79,7 +78,7 @@ export function LoginPage() {
               />
             </FormField>
 
-            <FormField id="masuk-password" label="Password">
+            <FormField id="masuk-password" label="Kata Sandi">
               <Input
                 id="masuk-password"
                 type="password"
