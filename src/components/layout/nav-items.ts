@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { CalendarDays, Clock, History, Settings2 } from "lucide-react";
+import { CalendarDays, Clock, FileText, History, Settings2 } from "lucide-react";
 
 import type { Role } from "@/lib/types";
 
@@ -20,10 +20,13 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin_hr: [
     { href: "/kehadiran/pengaturan", label: "Pengaturan jam kerja", icon: Settings2 },
     { href: "/kehadiran/rekap", label: "Rekap kehadiran", icon: CalendarDays },
+    { href: "/kehadiran/rekap/detail", label: "Detail per hari", icon: History },
   ],
   karyawan: [
     { href: "/kehadiran/hari-ini", label: "Presensi Karyawan", icon: Clock },
+    { href: "/kehadiran/detail", label: "Detail Kehadiran", icon: History },
     { href: "/kehadiran/izin", label: "Izin & Sakit", icon: CalendarDays },
+    { href: "/kehadiran/izin/detail", label: "Detail Perizinan", icon: FileText },
     { href: "/kehadiran/rekap", label: "Rekap Saya", icon: History },
   ],
 };

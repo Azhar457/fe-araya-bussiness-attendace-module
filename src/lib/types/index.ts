@@ -109,6 +109,69 @@ export type LiveLoginResult = {
   };
 };
 /* ================================================================== */
+/* Bentuk wire M13 NATIVE (login nik+password → Bearer token)         */
+/* ================================================================== */
+
+/** GET /api/auth/me → profil M13 (Bearer token). */
+export type M13Me = {
+  karyawanId: number;
+  nik: string;
+  nama: string;
+  role: "admin_hr" | "karyawan";
+  jabatan: string;
+  divisi: string;
+};
+
+/** POST /api/auth/login → 200. */
+export type M13LoginResult = {
+  token: string;
+  user: M13Me;
+  /** detik, token valid selama ini (12 jam di BE live). */
+  expiresIn: number;
+};
+
+/** GET /api/attendance?month=YYYY-MM → riwayat presensi per-bulan (punya token). */
+export type M13AttendanceMonth = {
+  month: string; // "2026-10"
+  items: M13AttendanceItem[];
+};
+
+/** Satu baris riwayat presensi per hari. */
+export type M13AttendanceItem = {
+  id: number;
+  employeeId: number;
+  date: string; // "2026-10-24"
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  status: "hadir" | "terlambat" | "izin" | "sakit" | "cuti" | "alpa" | null;
+  isLate: boolean;
+  lateMinutes: number;
+};
+
+/**
+ * GET /api/attendance/recap/daily?month=YYYY-MM (HANYA HR, baru di BE).
+ * Rekapitulasi detail per hari: setiap baris = satu (karyawan × tanggal).
+ */
+export type M13DailyRecap = {
+  success: boolean;
+  data: {
+    periode: { bulan: number; tahun: number };
+    items: Array<{
+      karyawanId: number;
+      nama: string;
+      nik: string | null;
+      tanggal: string;
+      checkInAt: string | null;
+      checkOutAt: string | null;
+      status: "hadir" | "terlambat" | "izin" | "sakit" | "cuti" | "alpa" | null;
+      isLate: boolean;
+      lateMinutes: number;
+    }>;
+    kosong: boolean;
+  };
+};
+
+/* ================================================================== */
 /* Bentuk wire BE LIVE (laboratorium-backend.vercel.app)               */
 /* ================================================================== */
 

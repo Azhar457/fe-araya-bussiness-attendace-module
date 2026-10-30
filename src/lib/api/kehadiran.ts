@@ -1,73 +1,61 @@
 /**
- * API layer — M12 (Kel. C3) untuk auth + karyawan, M13 (BE live) untuk presensi.
+ * API layer — M13 (BE live) untuk auth + presensi. M13 BE (JWT_SECRET
+ * sudah di-set di Vercel) meng-issue Bearer token via POST /api/auth/login.
  *
- * Keputusan ERP: M12 = satu-satunya sumber login, identitas, dan role.
- * M13 tidak lagi issue auth token. Semua endpoint proteksi M13 menerima
- * Bearer token M12.
- *
- * Endpoint M13 (presensi, ke NEXT_PUBLIC_API_BASE_URL = laboratorium-backend):
- *   - POST /api/working-hours          (Admin HR)
+ * Endpoint M13 (ke NEXT_PUBLIC_API_BASE_URL = laboratorium-backend):
+ *   Auth:
+ *   - POST /api/auth/login          → { token, user, expiresIn }
+ *   - POST /api/auth/logout         (Bearer)
+ *   - GET  /api/auth/me             (Bearer) → profil
+ *   Presensi:
+ *   - POST /api/working-hours       (HR)
+ *   - GET  /api/working-hours
  *   - GET  /api/attendance/today
  *   - POST /api/attendance/check-in
  *   - POST /api/attendance/check-out
+ *   - GET  /api/attendance?month=YYYY-MM          (riwayat presensi)
  *   - GET  /api/leave-permissions
+ *   - GET  /api/leave-permissions?month=YYYY-MM
  *   - POST /api/leave-permissions
- *   - GET  /api/attendance/recap?bulan=&tahun=
- *
- * Endpoint M12 (auth + karyawan aktif, via proxy same-origin karena M12 tidak
- * mengirim CORS — lihat `src/app/api/m12/*`):
- *   - POST /api/m12/auth/login    → M12 POST /api/login
- *   - GET  /api/m12/auth/me       → M12 GET  /api/me
- *   - POST /api/m12/auth/logout   → M12 POST /api/logout
- *   - GET  /api/m12/karyawan-aktif → M12 GET /api/karyawan/aktif (HANYA HR)
- *
+ *   - GET  /api/attendance/recap?month=YYYY-MM    (HR: rekap tim)
  */
 import { request } from "@/lib/api/client";
 import type {
   LiveCheckInResult,
   LiveLeaveList,
   LiveLeaveResult,
-  LiveLoginResult,
   LiveRecap,
   LiveToday,
   LiveWorkingHours,
   LiveWorkingHoursResult,
   M12EmployeeList,
-  M12Session,
+  M13AttendanceMonth,
+  M13DailyRecap,
+  M13LoginResult,
+  M13Me,
   M14PushResult,
 } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
-/* Autentikasi — SEKARANG MENYATU DI M12 (Kel. C3)                    */
+/* Autentikasi — M13 NATIVE (nik + password → Bearer token)          */
 /* ------------------------------------------------------------------ */
 
-/**
- * POST /api/m12/auth/login (proxy same-origin → M12 POST /api/login).
- * Satu-satunya entry point login di ERP; identitas & role berasal M12.
- */
-export function login(email: string, password: string): Promise<LiveLoginResult> {
-  return request<LiveLoginResult>(
-    "/api/m12/auth/login",
-    {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    },
-    { local: true },
-  );
+/** POST /api/auth/login — nik + password → Bearer token M13. */
+export function login(nik: string, password: string): Promise<M13LoginResult> {
+  return request<M13LoginResult>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ nik, password }),
+  });
 }
 
-/** POST /api/m12/auth/logout — token dicabut di sisi M12. */
+/** POST /api/auth/logout — token dicabut di sisi M13. */
 export function logout(): Promise<{ message: string }> {
-  return request<{ message: string }>(
-    "/api/m12/auth/logout",
-    { method: "POST", body: "{}" },
-    { local: true },
-  );
+  return request<{ message: string }>("/api/auth/logout", { method: "POST", body: "{}" });
 }
 
-/** GET /api/m12/auth/me — profil + role + data diri Karyawan. */
-export function getMe(): Promise<M12Session> {
-  return request<M12Session>("/api/m12/auth/me", undefined, { local: true });
+/** GET /api/auth/me — profil M13 (Bearer token). */
+export function getMe(): Promise<M13Me> {
+  return request<M13Me>("/api/auth/me");
 }
 
 /* ------------------------------------------------------------------ */
@@ -148,6 +136,30 @@ export function getRecap(bulan: number, tahun: number): Promise<LiveRecap> {
   return request<LiveRecap>(
     `/api/attendance/recap?month=${tahun}-${String(bulan).padStart(2, "0")}`,
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* Riwayat presensi per-bulan (halaman detail kehadiran)              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * GET /api/attendance?month=YYYY-MM → riwayat presensi semua karyawan
+ * (HR) atau milik sendiri (Karyawan). Dipakai:
+ *  - Karyawan: halaman detail kehadiran per-tanggal (pilih tanggal)
+ *  - HR: rekapitulasi detail per hari (groupping per tanggal)
+ */
+export function getAttendanceMonth(month: string): Promise<M13AttendanceMonth> {
+  return request<M13AttendanceMonth>(`/api/attendance?month=${month}`);
+}
+
+/** GET /api/leave-permissions?month=YYYY-MM → riwayat izin/sakit. */
+export function listLeavesMonth(month: string): Promise<LiveLeaveList> {
+  return request<LiveLeaveList>(`/api/leave-permissions?month=${month}`);
+}
+
+/** GET /api/attendance/recap/daily?month=YYYY-MM (HANYA HR) — detail per hari. */
+export function getDailyRecap(month: string): Promise<M13DailyRecap> {
+  return request<M13DailyRecap>(`/api/attendance/recap/daily?month=${month}`);
 }
 
 /* ------------------------------------------------------------------ */

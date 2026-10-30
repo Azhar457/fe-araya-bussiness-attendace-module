@@ -1,5 +1,5 @@
 import type { ApiErrorBody } from "@/lib/types";
-import { DEMO_COOKIE, DEMO_IDENTITIES, TOKEN_COOKIE } from "@/lib/auth/constants";
+import { TOKEN_COOKIE } from "@/lib/auth/constants";
 
 /**
  * API client — mode BE asli (laboratorium-backend.vercel.app).
@@ -7,24 +7,13 @@ import { DEMO_COOKIE, DEMO_IDENTITIES, TOKEN_COOKIE } from "@/lib/auth/constants
  */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 
-/** Baca token Bearer dari cookie sesi (di-set halaman /masuk setelah login BE). */
+/** Baca token Bearer dari cookie sesi (di-set halaman /masuk setelah login M13). */
 function readTokenCookie(): string {
   if (typeof document === "undefined") return "";
   const match = document.cookie
     .split("; ")
     .find((row) => row.startsWith(`${TOKEN_COOKIE}=`));
   return match ? decodeURIComponent(match.split("=").slice(1).join("=")) : "";
-}
-
-/** Baca cookie demo (`araya_demo=user|hr`) → employeeId untuk fallback BE. */
-function readDemoEmployeeId(): string {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(`${DEMO_COOKIE}=`));
-  if (!match) return "";
-  const key = decodeURIComponent(match.split("=").slice(1).join("="));
-  return DEMO_IDENTITIES[key]?.employeeId ?? "";
 }
 
 export class ApiError extends Error {
@@ -67,13 +56,6 @@ export async function request<T>(
     };
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    // Fallback BE M13: identitas demo (X-Employee-Id) dikirim pada semua
-    // pemanggilan non-local (BE M13). BE memakai token M12 bila valid;
-    // jika tidak, fallback ke header ini (employeeId dari cookie demo).
-    if (!options?.local) {
-      const demoEmpId = readDemoEmployeeId();
-      if (demoEmpId) headers["X-Employee-Id"] = demoEmpId;
-    }
     response = await fetch(options?.local ? path : apiUrl(path), {
       ...init,
       headers,
