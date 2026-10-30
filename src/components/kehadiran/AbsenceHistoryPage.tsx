@@ -17,7 +17,7 @@ type LeaveRow = LiveLeaveList["data"][number];
 
 /**
  * M13-US3 — riwayat pengajuan izin/sakit milik karyawan (tabel penuh).
- * Sumber data BE LIVE: listLeaves (GET /api/leave-permissions, header X-Employee-Id).
+ * Sumber data BE LIVE: listLeaves (GET /api/leave-permissions, Bearer token M12).
  */
 export function AbsenceHistoryPage() {
   const [rows, setRows] = useState<LeaveRow[]>([]);

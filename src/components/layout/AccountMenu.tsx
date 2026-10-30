@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { logout } from "@/lib/api/kehadiran";
+import { m12Logout } from "@/lib/api/kehadiran";
 import { ROLE_LABEL, TOKEN_COOKIE } from "@/lib/auth/constants";
 import type { Role } from "@/lib/types";
 
@@ -32,8 +32,8 @@ export function AccountMenu({ userName, role }: { userName: string; role: Role }
 
   function onLogout() {
     setBusy(true);
-    // Cabut token di BE; cookie tetap dihapus walau panggilan gagal.
-    logout().catch(() => undefined);
+    // Cabut token di M12; cookie tetap dihapus walau panggilan gagal.
+    m12Logout().catch(() => undefined);
     document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0`;
     router.push("/masuk");
     router.refresh();

@@ -109,26 +109,8 @@ export type LiveLoginResult = {
   };
 };
 /* ================================================================== */
-/* Bentuk wire M13 NATIVE (login nik+password → Bearer token)         */
+/* Bentuk wire M13 LIVE (endpoint presensi BE live)                    */
 /* ================================================================== */
-
-/** GET /api/auth/me → profil M13 (Bearer token). */
-export type M13Me = {
-  karyawanId: number;
-  nik: string;
-  nama: string;
-  role: "admin_hr" | "karyawan";
-  jabatan: string;
-  divisi: string;
-};
-
-/** POST /api/auth/login → 200. */
-export type M13LoginResult = {
-  token: string;
-  user: M13Me;
-  /** detik, token valid selama ini (12 jam di BE live). */
-  expiresIn: number;
-};
 
 /** GET /api/attendance?month=YYYY-MM → riwayat presensi per-bulan (punya token). */
 export type M13AttendanceMonth = {

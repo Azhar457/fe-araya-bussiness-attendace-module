@@ -8,17 +8,18 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, Input } from "@/components/ui/FormField";
 import { ApiError } from "@/lib/api/client";
-import { login } from "@/lib/api/kehadiran";
+import { m12Login, normalizeRole } from "@/lib/api/kehadiran";
 import { TOKEN_COOKIE, homeFor } from "@/lib/auth/constants";
 
 /**
- * Halaman masuk M13: login ke BE M13 (nik + password → Bearer token).
+ * Halaman masuk M13 — login ke M12 (Kel. C3) via proxy FE
+ * `POST /api/m12/auth/login`, lalu token M12 disimpan di cookie
+ * `araya_token` dan dikirim ke semua endpoint BE M13.
  *
- *  - Endpoint: POST /api/auth/login (BE M13 langsung)
- *  - Field: nik + password
- *  - Respons: { token, user: { karyawanId, nik, nama, role, jabatan, divisi }, expiresIn }
- *  - Token disimpan di cookie non-HttpOnly `araya_token` → dipakai
- *    `Authorization: Bearer <token>` di semua endpoint BE M13
+ *  - Endpoint: POST /api/m12/auth/login (proxy → M12 /api/login)
+ *  - Field: email + password
+ *  - Respons: { success, token, role, employee_id, name, nik, ... }
+ *  - Role M12 ("Admin HR" | "Employee") dinormalisasi ke Role FE.
  */
 function setCookie(name: string, value: string, maxAge = 43200) {
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; samesite=lax`;
@@ -26,7 +27,7 @@ function setCookie(name: string, value: string, maxAge = 43200) {
 
 export function LoginPage() {
   const router = useRouter();
-  const [nik, setNik] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -34,18 +35,17 @@ export function LoginPage() {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!nik.trim() || !password) {
-      setError("NIK dan password wajib diisi.");
+    if (!email.trim() || !password) {
+      setError("Email dan password wajib diisi.");
       return;
     }
 
     setError(null);
     setSubmitting(true);
     try {
-      const result = await login(nik.trim(), password);
-      setCookie(TOKEN_COOKIE, result.token, result.expiresIn);
-      // BE M13 sudah mengirim `role` yang benar ("admin_hr" | "karyawan").
-      const role = result.user.role;
+      const result = await m12Login(email.trim(), password);
+      setCookie(TOKEN_COOKIE, result.token);
+      const role = normalizeRole(result.role);
       router.replace(homeFor(role));
       router.refresh();
     } catch (caught) {
@@ -68,14 +68,14 @@ export function LoginPage() {
           {error ? <Banner variant="danger" message={error} /> : null}
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
-            <FormField id="masuk-nik" label="NIK">
+            <FormField id="masuk-email" label="Email">
               <Input
-                id="masuk-nik"
-                type="text"
+                id="masuk-email"
+                type="email"
                 autoComplete="username"
-                placeholder="EMP101"
-                value={nik}
-                onChange={(event) => setNik(event.target.value)}
+                placeholder="hr@araya.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
               />
             </FormField>
 

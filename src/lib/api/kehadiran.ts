@@ -1,12 +1,9 @@
 /**
- * API layer — M13 (BE live) untuk auth + presensi. M13 BE (JWT_SECRET
- * sudah di-set di Vercel) meng-issue Bearer token via POST /api/auth/login.
+ * API layer — M13 (BE live) untuk presensi. Login & me via M12
+ * (proxy FE `/api/m12/auth/*`), token M12 dikirim ke semua endpoint M13
+ * (shared `neondb`).
  *
  * Endpoint M13 (ke NEXT_PUBLIC_API_BASE_URL = laboratorium-backend):
- *   Auth:
- *   - POST /api/auth/login          → { token, user, expiresIn }
- *   - POST /api/auth/logout         (Bearer)
- *   - GET  /api/auth/me             (Bearer) → profil
  *   Presensi:
  *   - POST /api/working-hours       (HR)
  *   - GET  /api/working-hours
@@ -24,6 +21,7 @@ import type {
   LiveCheckInResult,
   LiveLeaveList,
   LiveLeaveResult,
+  LiveLoginResult,
   LiveRecap,
   LiveToday,
   LiveWorkingHours,
@@ -31,31 +29,61 @@ import type {
   M12EmployeeList,
   M13AttendanceMonth,
   M13DailyRecap,
-  M13LoginResult,
-  M13Me,
   M14PushResult,
+  Role,
 } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
-/* Autentikasi — M13 NATIVE (nik + password → Bearer token)          */
+/* Autentikasi — M12 (proxy FE /api/m12/auth/* → M12 POST /api/login) */
 /* ------------------------------------------------------------------ */
 
-/** POST /api/auth/login — nik + password → Bearer token M13. */
-export function login(nik: string, password: string): Promise<M13LoginResult> {
-  return request<M13LoginResult>("/api/auth/login", {
+/**
+ * POST /api/m12/auth/login (proxy FE → M12 POST /api/login).
+ * email + password → token M12 + identitas (role string M12).
+ */
+export function m12Login(email: string, password: string): Promise<LiveLoginResult> {
+  return request<LiveLoginResult>("/api/m12/auth/login", {
     method: "POST",
-    body: JSON.stringify({ nik, password }),
-  });
+    body: JSON.stringify({ email, password }),
+  }, { local: true });
 }
 
-/** POST /api/auth/logout — token dicabut di sisi M13. */
-export function logout(): Promise<{ message: string }> {
-  return request<{ message: string }>("/api/auth/logout", { method: "POST", body: "{}" });
+/**
+ * POST /api/m12/auth/logout (proxy FE → M12 POST /api/logout, Bearer token).
+ */
+export function m12Logout(): Promise<{ message: string }> {
+  return request<{ message: string }>("/api/m12/auth/logout", {
+    method: "POST",
+    body: "{}",
+  }, { local: true });
 }
 
-/** GET /api/auth/me — profil M13 (Bearer token). */
-export function getMe(): Promise<M13Me> {
-  return request<M13Me>("/api/auth/me");
+/**
+ * GET /api/m12/auth/me (proxy FE → M12 GET /api/me, Bearer token).
+ * Balas M12: { employee_id, name, nik, role, ... } — role string
+ * M12 ("Admin HR" | "Employee") dinormalisasi via `normalizeRole`.
+ */
+export type M12MeResponse = {
+  success: boolean;
+  employee_id: number;
+  name: string;
+  nik: string | null;
+  /** "Admin HR" | "Employee" — label tampilan dari M12. */
+  role: string;
+};
+export function getM12Me(): Promise<M12MeResponse> {
+  return request<M12MeResponse>("/api/m12/auth/me", undefined, { local: true });
+}
+
+/**
+ * Normalisasi role string M12 ("Admin HR" | "Employee") → Role FE
+ * ("admin_hr" | "karyawan").
+ */
+export function normalizeRole(role: string): Role {
+  const r = role.trim().toLowerCase();
+  return r === "admin hr" || r === "admin_hr" || r === "admin" || r === "hr"
+    ? "admin_hr"
+    : "karyawan";
 }
 
 /* ------------------------------------------------------------------ */

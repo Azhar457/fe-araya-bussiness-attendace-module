@@ -51,27 +51,27 @@ aturan per jabatan, GPS, koreksi presensi, audit log, generate/lock rekap.
 
 ## 3. Masuk (login) dan identitas
 
-Tidak ada user story login di SSOT, dan **tidak ada endpoint autentikasi** di M12 maupun M13.
+**Satu-satunya sumber auth: M12 (Kel. C3)** — sesuai kesepakatan antar modul.
+FE memanggil M12 via proxy same-origin (`/api/m12/auth/*`), tidak langsung
+karena M12 tidak mengirim header CORS.
 
-Karena itu `/masuk` bekerja seperti ini:
+Alur `/masuk`:
 
-1. FE menarik daftar karyawan aktif dari M12 (`GET /api/m12/karyawan-aktif` → proxy).
-2. Pengguna memilih karyawan. **Peran tidak bisa dipilih bebas** — diturunkan dari kolom
-   `jabatan` karyawan tersebut (`/hr|sdm/i` → Admin HR, selain itu Karyawan).
-3. Tiga cookie diset: `araya_employee` (id), `araya_role`, `araya_name`.
-4. Setiap request ke BE mengirim `X-Employee-Id: <id>` — BE mengautentikasi per endpoint.
+1. Form email + password → `POST /api/m12/auth/login` (proxy → M12 `POST /api/login`).
+2. Respons M12: `{ success, token, role, employee_id, name, nik, ... }`.
+3. Token M12 disimpan di cookie non-HttpOnly `araya_token`.
+4. Semua request ke BE M13 memakai `Authorization: Bearer <token M12>` (shared `neondb`).
+5. Guard `getSession()` memvalidasi sesi via `GET /api/m12/auth/me` (proxy → M12).
+6. Role M12 ("Admin HR" | "Employee") dinormalisasi ke role internal FE
+   (`admin_hr` | `karyawan`) oleh `normalizeRole()` di `src/lib/api/kehadiran.ts`.
 
-Catatan penting:
+Catatan:
 
-- **Peran diturunkan dari `jabatan` M12** (`/hr|sdm/i`), yang isinya tidak konsisten
-  (`HR`, `SDm`, `SDM`, `Karyawan`). Bila `jabatan` tidak mengandung HR/SDM, akun masuk
-  sebagai Karyawan. Ini tetap bukan otorisasi server — hanya pemetaan data.
-- Cookie **bukan HttpOnly** dan bisa diubah dari browser. Ini bukan kontrol keamanan,
-  hanya cara membawa identitas sampai platform punya auth sungguhan.
-- ID karyawan **wajib angka**. BE menolak id non-numerik dengan `401 UNAUTHORIZED`.
-- BE M13 menerima id apa pun (tidak memvalidasi keberadaan karyawan) — penolakan karyawan
-  nonaktif dilakukan di sisi FE saat memilih dari daftar M12.
-
+- Cookie `araya_token` **bukan HttpOnly** dan bisa diubah dari browser.
+  Ini bukan kontrol keamanan, hanya cara membawa identitas sampai M12
+  mengadopsi HttpOnly + refresh token.
+- Peran dari M12 (`role` string) sudah sesuai (Admin HR / Employee);
+  tidak perlu derivasi dari kolom `jabatan` lagi.
 ---
 
 ## 4. Integrasi antar modul
@@ -142,8 +142,11 @@ src/
       pengaturan/     # US1 (admin_hr)
       rekap/          # US5
     api/
-      m12/karyawan-aktif/   # proxy pull M12
-      m14/rekap/            # push rekap ke M14
+      m12/auth/login/     # proxy M12 login (email+password → token)
+      m12/auth/me/        # proxy M12 /me (validasi sesi + identitas)
+      m12/auth/logout/    # proxy M12 logout
+      m12/karyawan-aktif/ # proxy pull M12
+      m14/rekap/          # push rekap ke M14
     masuk/                  # halaman login
   components/
     auth/ kehadiran/ layout/ ui/
@@ -162,21 +165,15 @@ Guard peran ada di layout server: halaman `admin_hr` mengalihkan karyawan ke
 
 ## 7. Alur demo
 
-## 7.1 Akses demo cepat (tanpa login)
+## 7.1 Login
 
-Untuk showcase / demo tanpa nunggu login M12/M13 sehat:
+Kredensial demo M12:
 
-- `GET /user` → masuk sebagai **Karyawan** (employeeId 101, demo `Dimas Pratama`).
-- `GET /hr` → masuk sebagai **Admin HR** (employeeId 1, demo `Rani`).
+- **Admin HR**: `hr@araya.com` / `password123`
+- **Karyawan**: (email M12 — hubungi Kel. C3 untuk kredensial karyawan aktif)
 
-Mekanisme: route server set cookie demo `araya_demo`, session layer membaca
-identitas statis (Bukan BE), dan semua panggilan BE M13 memakai fallback
-header `X-Employee-Id`. Ini jalan meski login M12 (Kel. C3) atau M13
-(ikmal) sedang bermasalah, karena BE M13 sudah support `X-Employee-Id`
-sebagai fallback identitas.
-
-Kapan pakai: dosen/penguji tinggal buka `/user` atau `/hr` di browser.
-`/masuk` (login M12 asli) tetap tersedia di bawah tombol demo.
+Setelah login, pengguna diarahkan ke home page sesuai role
+(`admin_hr` → `/kehadiran/pengaturan`, `karyawan` → `/kehadiran/hari-ini`).
 
 ### Alur demo yang disarankan
 
