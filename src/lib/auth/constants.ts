@@ -2,7 +2,7 @@ import type { Role } from "@/lib/types";
 
 /** Konstanta auth yang aman dipakai di klien maupun server. */
 
-/** Cookie sesi: berisi token Bearer dari BE (diset halaman /masuk). */
+/** Cookie sesi: berisi token Bearer dari BE (diset halaman /login). */
 export const TOKEN_COOKIE = "araya_token";
 
 export const ROLE_LABEL: Record<Role, string> = {

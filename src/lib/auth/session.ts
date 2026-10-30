@@ -18,7 +18,7 @@ import type { Role } from "@/lib/types";
  *  3. Endpoint proteksi BE M13 dikirim dengan `Authorization: Bearer <token M12>`.
  *
  * Bila token tidak valid / M12 mati: `getSession()` membalas null →
- * dialihkan ke `/masuk`.
+ * dialihkan ke `/login`.
  */
 
 async function m12MeDirect(token: string) {
@@ -74,7 +74,7 @@ export async function getSession(): Promise<
 
 export async function requireSession() {
   const session = await getSession();
-  if (!session) redirect("/masuk");
+  if (!session) redirect("/login");
   return session;
 }
 
@@ -87,7 +87,7 @@ export async function requireRole(role: Role) {
 /**
  * Keluar dari M12 (token dicabut di M12 via POST /api/logout lewat proxy),
  * lalu bersihkan cookie lokal. Jalankan server-side; cookie token
- * dihapus, redirect ke /masuk.
+ * dihapus, redirect ke /login.
  */
 export async function logoutAndClear(): Promise<void> {
   const store = await cookies();

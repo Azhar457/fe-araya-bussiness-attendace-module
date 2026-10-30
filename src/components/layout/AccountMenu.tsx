@@ -35,7 +35,7 @@ export function AccountMenu({ userName, role }: { userName: string; role: Role }
     // Cabut token di M12; cookie tetap dihapus walau panggilan gagal.
     m12Logout().catch(() => undefined);
     document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0`;
-    router.push("/masuk");
+    router.push("/login");
     router.refresh();
   }
 

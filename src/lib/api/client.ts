@@ -7,7 +7,7 @@ import { TOKEN_COOKIE } from "@/lib/auth/constants";
  */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 
-/** Baca token Bearer dari cookie sesi (di-set halaman /masuk setelah login M12). */
+/** Baca token Bearer dari cookie sesi (di-set halaman /login setelah login M12). */
 function readTokenCookie(): string {
   if (typeof document === "undefined") return "";
   const match = document.cookie
