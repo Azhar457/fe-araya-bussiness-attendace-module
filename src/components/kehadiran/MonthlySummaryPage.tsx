@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
@@ -10,9 +10,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, type Column } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/client";
-import { getKaryawanAktif, getRecap, pushRekapKeM14 } from "@/lib/api/kehadiran";
+import { getRecap, pushRekapKeM14 } from "@/lib/api/kehadiran";
 import { currentMonth, formatMonthLabel } from "@/lib/format";
-import type { LiveRecap, M12Employee } from "@/lib/types";
+import type { LiveRecap } from "@/lib/types";
 
 const BULAN_LABEL = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -42,9 +42,9 @@ function defaultBulanTahun(): { bulan: number; tahun: number } {
  * Karyawan: filter baris rekap oleh karyawan_id === session.employeeId.
  * HR: tampilkan semua baris, ringkasan total, dan aksi kirim ke M14.
  *
- * Nama karyawan ditarik dari M12 (pull) karena rekap M13 hanya berisi
- * karyawan_id. Bila M12 tidak dapat dihubungi, tabel tetap tampil dengan
- * label "Karyawan #id".
+ * Nama & nik langsung dari BE M13 (di-join dengan COALESCE
+ * attendance_users / m12_karyawan di sisi BE). Tanpa M12 pull FE —
+ * id-space M12 dan M13 berbeda sehingga join di FE tidak dapat diandalkan.
  */
 export function MonthlySummaryPage({
   scope,
@@ -58,8 +58,6 @@ export function MonthlySummaryPage({
   const [bulan, setBulan] = useState(initial.bulan);
   const [tahun, setTahun] = useState(initial.tahun);
   const [recap, setRecap] = useState<LiveRecap["data"] | null>(null);
-  const [employees, setEmployees] = useState<M12Employee[]>([]);
-  const [nameNotice, setNameNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -81,48 +79,18 @@ export function MonthlySummaryPage({
     void load(bulan, tahun);
   }, [load, bulan, tahun]);
 
-  // PULL M12: nama karyawan untuk kolom "Karyawan".
-  useEffect(() => {
-    let alive = true;
-    void getKaryawanAktif()
-      .then((result) => {
-        if (!alive) return;
-        setEmployees(result.data);
-        if (result.error) setNameNotice(result.error);
-      })
-      .catch(() => {
-        if (alive) setNameNotice("Nama karyawan tidak dapat dimuat.");
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const rows: RecapViewRow[] = useMemo(() => {
-    if (!recap) return [];
-    const ZERO = { hadir: 0, terlambat: 0, izin_sakit: 0, cuti: 0, alpa: 0 };
-
-    if (scope === "mine") {
-      return recap.rekap
-        .filter((row) => String(row.karyawan_id) === employeeId)
-        .map((row) => ({ ...row, nama: employees.find((e) => String(e.id) === employeeId)?.nama ?? `Karyawan #${row.karyawan_id}` }));
-    }
-
-    // HR: seluruh karyawan aktif M12 muncul, termasuk yang belum punya presensi (0).
-    const byId = new Map(recap.rekap.map((row) => [String(row.karyawan_id), row]));
-    const roster: RecapViewRow[] = employees.map((item) => ({
-      ...ZERO,
-      ...(byId.get(String(item.id)) ?? {}),
-      karyawan_id: item.id,
-      nama: item.nama,
-    }));
-    // Sisa baris rekap yang id-nya tidak ada di M12 tetap ditampilkan (jangan sembunyikan data).
-    const orphans: RecapViewRow[] = recap.rekap
-      .filter((row) => !employees.some((item) => item.id === row.karyawan_id))
-      .map((row) => ({ ...row, nama: `Karyawan #${row.karyawan_id}` }));
-
-    return [...roster, ...orphans];
-  }, [recap, scope, employeeId, employees]);
+  /**
+   * Baris rekap dari M13. Nama + nik sudah digabung di BE (COALESCE
+   * attendance_users / m12_karyawan). scope="mine" hanya baris milik
+   * session.employeeId; scope="team" menampilkan semua baris.
+   */
+  const rows: RecapViewRow[] =
+    recap?.rekap
+      .filter((row) => (scope === "mine" ? String(row.karyawan_id) === employeeId : true))
+      .map((row) => ({
+        ...row,
+        nama: row.nama ?? `Karyawan #${row.karyawan_id}`,
+      })) ?? [];
 
   const ringkasan = recap?.ringkasan;
   const kosong = rows.length === 0;
@@ -208,7 +176,6 @@ export function MonthlySummaryPage({
       </Card>
 
       {error ? <Banner variant="danger" message={error} /> : null}
-      {nameNotice ? <Banner variant="info" message={nameNotice} /> : null}
 
       <Table
         caption={`Rekap ${formatMonthLabel(`${tahun}-${String(bulan).padStart(2, "0")}`)}`}
