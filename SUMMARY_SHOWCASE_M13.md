@@ -1,75 +1,77 @@
-# Catatan Showcase M13 — 29 Okt 2026
+# Catatan Showcase M13 — 1 Nov 2026
 
-## Yang bisa didemo BESOK (100% jalan, tanpa nunggu BE M12/M13 login sehat)
+FE M13 (Next.js 15, repo `fe-araya-bussiness-attendace-module`). Login memakai
+**endpoint M12** sesuai kesepakatan: FE → `POST /api/m12/auth/login` (proxy) →
+M12 `POST /api/login`. Token M12 disimpan di cookie `araya_token`.
 
-Akses demo tanpa login (FE baru commit `62325c1`):
+Route demo `/user` dan `/hr` **sudah dihapus** (commit `8c499e4`) — tidak ada
+akses demo tanpa login lagi.
 
-| URL | Peran | Halaman awal |
-|-----|-------|--------------|
-| `GET /user` | Karyawan (employeeId 101, "Dimas Pratama") | `/kehadiran/hari-ini` |
-| `GET /hr` | Admin HR (employeeId 1, "Rani") | `/kehadiran/pengaturan` |
+## Akun untuk demo
 
-Mekanisme: cookie demo `araya_demo` + fallback header `X-Employee-Id` ke BE M13.
-Tidak bergantung login M12 (Kel. C3) maupun login M13 (Ikmal).
+| Peran | Email | Password | Halaman awal |
+|---|---|---|---|
+| Admin HR | `hr@araya.com` | `password123` | `/kehadiran/pengaturan` |
+| Employee | `andi@araya.com` | `password123` | `/kehadiran/hari-ini` |
 
-### Alur demo yang disarankan
+Sesi M12 (`GET /api/m12/auth/me`) → `employee_id` 8 (Admin HR) dan 9 (Employee),
+role M12 `Admin HR` / `Employee` dinormalisasi jadi `admin_hr` / `karyawan`.
 
-1. **`/hr`** → `/kehadiran/pengaturan`
-   - Prefill otomatis dari BE live (`GET /api/working-hours`): 08:00 / 17:00 / 15
-   - Ubah jam masuk/pulang & toleransi → **Simpan** → BE `POST /api/working-hours` 200
-   - Coba jam pulang lebih awal dari jam masuk → ditolak 400 (AC US1 #2)
-2. **`/hr`** → `/kehadiran/rekap`
-   - Tabel rekap per karyawan (hadir, terlambat, izin/sakit, cuti, alpa)
-   - Tombol **Kirim ke M14** (nonaktif sampai M14 endpoint disepakati — saat ini membalas `{ sent:false }`)
-3. **`/user`** → `/kehadiran/hari-ini`
-   - Presensi masuk / keluar live (data asli dari BE, bukan mockup)
-   - Ulangi presensi → ditolak 409 (AC US2 #2)
-4. **`/user`** → `/kehadiran/izin`
-   - Ajukan izin/sakit: alasan kosong → ditolak 400 (AC US3 #2); isi alasan → tersimpan + muncul di riwayat
-5. **`/user`** → `/kehadiran/izin/riwayat`
-   - Daftar pengajuan izin/sakit milik karyawan
+## Peta halaman
 
-Tombol "Masuk sebagai Karyawan / Admin HR" juga sudah di halaman `/masuk`, jadi
-penguji bisa klik dari sana (bukan ketik URL).
+| Peran | URL | Isi |
+|---|---|---|
+| Karyawan | `/kehadiran/hari-ini` | kartu presensi hari ini, tombol check-in/out, ringkasan bulan |
+| Karyawan | `/kehadiran/detail` | riwayat per tanggal + detail per hari |
+| Karyawan | `/kehadiran/izin` | form ajukan izin/sakit |
+| Karyawan | `/kehadiran/izin/detail` | daftar izin + detail per pengajuan |
+| Karyawan | `/kehadiran/izin/riwayat` | riwayat pengajuan penuh |
+| Karyawan | `/kehadiran/rekap` | rekap bulanan sendiri |
+| Admin HR | `/kehadiran/pengaturan` | jam kerja + toleransi |
+| Admin HR | `/kehadiran/rekap` | rekap seluruh tim + tombol "Kirim ke M14" |
+| Admin HR | `/kehadiran/rekap/detail` | rekap per hari (butuh endpoint baru BE) |
 
-### Yang sudah verified (smoke test E2E 29/10)
-- `/user` → redirect `hari-ini` HTTP 200, cookie ter-set
-- `/hr` → redirect `pengaturan` HTTP 200 + `rekap` HTTP 200
-- BE live via `X-Employee-Id`: `today`(101)=200, `check-in`=201, `check-out`=200,
-  `leave` GET/POST=200/201, `working-hours` GET=200 & POST(admin_hr 1)=200,
-  `working-hours` POST(karyawan 101)=403 (benar), `recap`=200, `DELETE leave`=200 (fixed)
-- CORS BE allow `X-Employee-Id` dari origin FE
-- `tsc --noEmit` + `next build` hijau
-- Data uji (izin test) sudah di-cleanup di DB
+Guard peran ada di server (`requireRole`): peran yang salah di-redirect ke
+halaman utama perannya, bukan 403.
 
----
+## Known blocker — BE M13 menolak token M12 (401)
 
-## Yang HARUS ditanyakan/dikerjakan Ikmal (BE M13) — tidak memblokir demo,
-tapi perlu untuk "login asli" + Swagger sesuai Panduan API
+BE M13 memverifikasi Bearer token dengan `JWT_SECRET` miliknya sendiri
+(`src/lib/auth.js` → `jwtVerify(token, getSecret())`). Token dari M12 ditandatangani
+dengan secret M12, jadi verifikasi gagal → `resolveIdentity` mengembalikan `null`
+→ **401** pada semua endpoint M13 yang dilindungi:
 
-1. **`POST /api/auth/login` → 500.** Akar: env `JWT_SECRET` belum di-set di Vercel
-   project BE. Minta set 1 nilai string acak, deploy. Setelah itu login
-   nik+password jalan (akun seed: `EMP101/araya123` karyawan, `EMP001/araya123` admin_hr).
-2. **Swagger deployed belum update.** `public/swagger.json` + halaman `/api/docs`
-   di live masih versi 4 endpoint lama (tanpa `today`, `check-out`,
-   `GET working-hours`, `auth/*`). Re-deploy setelah set `JWT_SECRET` supaya
-   file OpenAPI cocok kode baru — sesuai Panduan API bab 7 ("kontrak sah hanya
-   bila tertulis di file OpenAPI").
-3. **`JWT_SECRET` juga perlu env di Vercel BE.** Lihat `VERCEL_ENV_BE.txt` di repo FE.
-4. **Kontrak Panduan API (Dokumen Teknis bab 3.5):**
-   - **K-12** M12→M13: data karyawan aktif (`GET /api/m12/v1/employees?status=aktif`)
-     — FE M13 tarik via proxy `/api/m12/karyawan-aktif`. Saat ini degraded graceful.
-   - **K-13** M12→M13: event `leave.approved` — FE M13 belum implementasi receiver.
-   - **K-14** M13→M14: rekap bulanan (`GET /api/m13/v1/attendance-recaps?month=`)
-     — FE M13 push via `/api/m14/rekap` (M14_ENDPOINT masih kosong).
-   - Catatan: nama endpoint di studi kasus lama M4→M7/M4→M10 sudah ganti.
-     Pakai nomor di Panduan API v1.0 + studi kasus terbaru.
+```
+GET /api/attendance/today            → 401
+GET /api/attendance?month=YYYY-MM     → 401
+GET /api/leave-permissions            → 401
+GET /api/attendance/recap/daily       → 404 (endpoint belum ada di BE yang live)
+```
 
----
+Endpoint publik M13 (tanpa token) tetap jalan: `GET /api/working-hours`,
+`GET /api/attendance/recap`, `GET /api/docs`.
 
-## Catatan teknis untuk FE
+### Kontrak yang dibutuhkan dari BE M13
 
-- `.env` lokal sudah di-commit dengan `NEXT_PUBLIC_API_BASE_URL` = BE live.
-- Untuk deploy Vercel FE, set env sama (lihat `VERCEL_ENV.txt`).
-- Login asli (M12) tetap jalan lewat proxy `/api/m12/auth/*` — tidak berubah.
-  Jalur demo (`/user`, `/hr`) hanya fallback untuk showcase.
+Satu endpoint tukar token (dipanggil FE lewat proxy, server-to-server):
+
+```
+POST /api/auth/exchange
+Authorization: Bearer <token M12>
+→ 200 { "token": "<token M13>", "role": "admin_hr|karyawan", "karyawan_id": 1 }
+→ 401 { "error": { "code": "UNAUTHORIZED", ... } }
+```
+
+Implementasi di BE M13: verifikasi token M12 → `GET {M12_API_BASE_URL}/api/me` →
+terbitkan token M13 (HS256, `sub` = `karyawan_id` M13, `role` dinormalisasi).
+FE sudah siap: token hasil exchange dipakai untuk semua request ke BE M13.
+
+Alternatif (kurang ideal): BE M13 menerima token M12 langsung lewat
+verifikasi ke M12 — butuh konfigurasi secret bersama.
+
+## Catatan lain
+
+- `GET /api/attendance/recap/daily` sudah ditulis di repo BE M13 (commit `44c1e98`)
+  tapi belum ada di deployment Vercel → HR "Rekap detail per hari" masih kosong.
+- Tombol "Kirim ke M14" nonaktif sampai `M14_RECAP_ENDPOINT` disepakati.
+- `favicon.ico` masih 404 (kosmetik).
