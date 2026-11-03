@@ -3,14 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Banner } from "@/components/ui/Banner";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, Select } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, type Column } from "@/components/ui/Table";
-import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/client";
-import { getRecap, pushRekapKeM14 } from "@/lib/api/kehadiran";
+import { getRecap } from "@/lib/api/kehadiran";
 import { currentMonth, formatMonthLabel } from "@/lib/format";
 import type { LiveRecap } from "@/lib/types";
 
@@ -53,19 +51,19 @@ export function MonthlySummaryPage({
   scope: "team" | "mine";
   employeeId: string;
 }) {
-  const { push } = useToast();
   const initial = defaultBulanTahun();
   const [bulan, setBulan] = useState(initial.bulan);
   const [tahun, setTahun] = useState(initial.tahun);
   const [recap, setRecap] = useState<LiveRecap["data"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
 
   const load = useCallback(async (targetBulan: number, targetTahun: number) => {
     setLoading(true);
     setError(null);
     try {
+      // BE M13 (post-PR) sudah menampilkan semua karyawan aktif dengan angka 0
+      // bila belum ada presensi/izin/cuti — FE tinggal mengambilnya.
       const result = await getRecap(targetBulan, targetTahun);
       setRecap(result.data);
     } catch (caught) {
@@ -80,9 +78,10 @@ export function MonthlySummaryPage({
   }, [load, bulan, tahun]);
 
   /**
-   * Baris rekap dari M13. Nama + nik sudah digabung di BE (COALESCE
-   * attendance_users / m12_karyawan). scope="mine" hanya baris milik
-   * session.employeeId; scope="team" menampilkan semua baris.
+   * Baris rekap dari BE M13. Sejak PR rekap di BE, semua karyawan aktif
+   * (m12_karyawan + attendance_users) sudah tampil di response rekap,
+   * termasuk yang belum ada presensi/izin/cuti (angka 0). FE tinggal
+   * menampilkan apa adanya — tanpa merge roster M12.
    */
   const rows: RecapViewRow[] =
     recap?.rekap
@@ -93,27 +92,6 @@ export function MonthlySummaryPage({
       })) ?? [];
 
   const ringkasan = recap?.ringkasan;
-  const kosong = rows.length === 0;
-
-  async function onSendToM14() {
-    setSending(true);
-    try {
-      const result = await pushRekapKeM14(bulan, tahun);
-      push({
-        variant: result.sent ? "success" : "info",
-        title: result.sent ? "Rekap terkirim" : "Belum terkirim",
-        description: result.message,
-      });
-    } catch (caught) {
-      push({
-        variant: "danger",
-        title: "Gagal mengirim",
-        description: caught instanceof ApiError ? caught.message : "Koneksi terputus.",
-      });
-    } finally {
-      setSending(false);
-    }
-  }
 
   const columns: Column<RecapViewRow>[] = [
     { key: "nama", header: "Karyawan", render: (row) => <span className="text-text">{row.nama}</span> },
@@ -161,17 +139,7 @@ export function MonthlySummaryPage({
             </Select>
           </FormField>
 
-          {scope === "team" ? (
-            <Button
-              variant="secondary"
-              onClick={() => void onSendToM14()}
-              loading={sending}
-              loadingText="Mengirim…"
-              disabled={kosong}
-            >
-              Kirim ke Penggajian
-            </Button>
-          ) : null}
+
         </div>
       </Card>
 
