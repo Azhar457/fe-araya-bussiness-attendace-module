@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { TOKEN_COOKIE, homeFor } from "@/lib/auth/constants";
+import { M13_TOKEN_COOKIE, TOKEN_COOKIE, homeFor } from "@/lib/auth/constants";
 import { normalizeRole, type M12MeResponse } from "@/lib/api/kehadiran";
 import type { Role } from "@/lib/types";
 
@@ -112,4 +112,5 @@ export async function logoutAndClear(): Promise<void> {
     }
   }
   store.delete(TOKEN_COOKIE);
+  store.delete(M13_TOKEN_COOKIE);
 }

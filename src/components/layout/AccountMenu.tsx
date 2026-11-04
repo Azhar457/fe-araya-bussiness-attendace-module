@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { m12Logout } from "@/lib/api/kehadiran";
-import { ROLE_LABEL, TOKEN_COOKIE } from "@/lib/auth/constants";
+import { M13_TOKEN_COOKIE, ROLE_LABEL, TOKEN_COOKIE } from "@/lib/auth/constants";
 import type { Role } from "@/lib/types";
 
 /** Menu akun di kanan navbar (Panduan UI 4 · Kerangka halaman). */
@@ -35,6 +35,7 @@ export function AccountMenu({ userName, role }: { userName: string; role: Role }
     // Cabut token di M12; cookie tetap dihapus walau panggilan gagal.
     m12Logout().catch(() => undefined);
     document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0`;
+    document.cookie = `${M13_TOKEN_COOKIE}=; path=/; max-age=0`;
     router.push("/login");
     router.refresh();
   }

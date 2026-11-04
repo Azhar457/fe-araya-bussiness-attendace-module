@@ -7,9 +7,9 @@ import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, Input } from "@/components/ui/FormField";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiUrl } from "@/lib/api/client";
 import { m12Login, normalizeRole } from "@/lib/api/kehadiran";
-import { TOKEN_COOKIE, homeFor } from "@/lib/auth/constants";
+import { M13_TOKEN_COOKIE, TOKEN_COOKIE, homeFor } from "@/lib/auth/constants";
 
 /**
  * Halaman masuk M13 — login ke M12 (Kel. C3) via proxy FE
@@ -45,6 +45,25 @@ export function LoginPage() {
     try {
       const result = await m12Login(email.trim(), password);
       setCookie(TOKEN_COOKIE, result.token);
+
+      // Tukar token M12 → token M13 (BE M13 verifikasi ke M12; password tetap
+      // milik M12). Gagal tidak memblokir masuk — client.ts akan mencoba lagi
+      // otomatis saat ada request M13 yang 401.
+      try {
+        const res = await fetch(apiUrl("/api/auth/exchange"), {
+          method: "POST",
+          headers: { Authorization: `Bearer ${result.token}`, "Content-Type": "application/json" },
+          body: "{}",
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { token?: string };
+          if (data.token) setCookie(M13_TOKEN_COOKIE, data.token);
+        }
+      } catch {
+        // diamkan: self-heal di client.ts yang menangani.
+      }
+
       const role = normalizeRole(result.role);
       router.replace(homeFor(role));
       router.refresh();
