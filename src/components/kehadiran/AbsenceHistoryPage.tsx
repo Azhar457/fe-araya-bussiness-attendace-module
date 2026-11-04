@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
-import { Briefcase, CalendarDays, Download, Inbox, Paperclip, Stethoscope } from "lucide-react";
+import { Briefcase, CalendarDays, Download, FileText, Inbox, Paperclip, Stethoscope } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -44,6 +44,7 @@ export function AbsenceHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Pengajuan | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,8 +113,7 @@ export function AbsenceHistoryPage() {
           {row.jumlah > 1 ? <span className="text-caption text-muted"> · {row.jumlah} hari</span> : null}
         </span>
       ),
-    },
-    {
+    },    {
       key: "jenis",
       header: "Jenis",
       render: (row) => {
@@ -166,6 +166,21 @@ export function AbsenceHistoryPage() {
           </span>
         ),
     },
+    {
+      key: "aksi",
+      header: "Detail",
+      align: "right",
+      render: (row) => (
+        <button
+          type="button"
+          onClick={() => setSelected(row)}
+          className="inline-flex items-center gap-1 text-label text-primary hover:text-primary-hover"
+        >
+          <FileText aria-hidden size={14} />
+          Lihat
+        </button>
+      ),
+    },
   ];
 
   return (
@@ -174,6 +189,15 @@ export function AbsenceHistoryPage() {
         breadcrumb={[{ label: "Kehadiran", href: "/kehadiran/hari-ini" }, { label: "Izin & Sakit" }, { label: "Riwayat" }]}
         title="Riwayat Izin & Sakit"
       />
+
+      {selected ? (
+        <PengajuanDetailCard
+          detail={selected}
+          onClose={() => setSelected(null)}
+          onUnduh={(p) => void unduhLampiran(p)}
+          downloading={downloading}
+        />
+      ) : null}
 
       {loading ? (
         <Card className="flex flex-col items-center gap-3 p-10">
@@ -218,6 +242,84 @@ export function AbsenceHistoryPage() {
 function statusLabel(status: string): string {
   const map: Record<string, string> = { pending: "Menunggu", approved: "Disetujui", rejected: "Ditolak" };
   return map[status] ?? status;
+}
+
+/** Kartu detail satu pengajuan (muncul di atas tabel saat baris diklik "Lihat"). */
+function PengajuanDetailCard({
+  detail,
+  onClose,
+  onUnduh,
+  downloading,
+}: {
+  detail: Pengajuan;
+  onClose: () => void;
+  onUnduh: (p: Pengajuan) => void;
+  downloading: string | null;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <p className="text-caption font-semibold uppercase tracking-wide text-muted">Detail Pengajuan</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="text-h3 text-text tabular-nums">
+              {detail.jumlah > 1
+                ? `${formatDate(detail.mulai)} – ${formatDate(detail.selesai)}`
+                : formatDate(detail.mulai)}
+            </h3>
+            <Badge tone="info">{JENIS_LABEL[detail.jenis] ?? detail.jenis}</Badge>
+            {detail.status ? <Badge tone={statusTone(detail.status)}>{statusLabel(detail.status)}</Badge> : null}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Tutup detail"
+          className="text-body text-muted hover:text-text"
+        >
+          Tutup ×
+        </button>
+      </div>
+
+      <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <dt className="text-caption text-muted">Jumlah Hari</dt>
+          <dd className="text-body text-text">{detail.jumlah} hari kerja</dd>
+        </div>
+        <div className="flex flex-col gap-1">
+          <dt className="text-caption text-muted">Status</dt>
+          <dd className="text-body text-text">{detail.status ? statusLabel(detail.status) : "—"}</dd>
+        </div>
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <dt className="text-caption text-muted">Alasan</dt>
+          <dd className="text-body text-text">{detail.alasan || "—"}</dd>
+        </div>
+        {detail.reviewerNote ? (
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <dt className="text-caption text-muted">Catatan Verifikator</dt>
+            <dd className="text-body text-text">{detail.reviewerNote}</dd>
+          </div>
+        ) : null}
+        <div className="flex flex-col gap-1">
+          <dt className="text-caption text-muted">Lampiran</dt>
+          <dd className="text-body text-text">
+            {detail.attachment ? (
+              <button
+                type="button"
+                onClick={() => onUnduh(detail)}
+                disabled={downloading === detail.key}
+                className="inline-flex items-center gap-1 text-label text-primary hover:text-primary-hover disabled:opacity-50"
+              >
+                <Download aria-hidden size={14} /> Unduh lampiran
+              </button>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
+      </dl>
+    </Card>
+  );
 }
 
 function statusTone(status: string): "success" | "pending" | "danger" | "info" | "neutral" {

@@ -26,7 +26,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/kehadiran/hari-ini", label: "Presensi Karyawan", icon: Clock },
     { href: "/kehadiran/detail", label: "Detail Kehadiran", icon: History },
     { href: "/kehadiran/izin", label: "Izin & Sakit", icon: CalendarDays },
-    { href: "/kehadiran/izin/detail", label: "Detail Perizinan", icon: FileText },
+    { href: "/kehadiran/izin/riwayat", label: "Riwayat Izin & Sakit", icon: FileText },
     { href: "/kehadiran/rekap", label: "Rekap Saya", icon: History },
   ],
 };

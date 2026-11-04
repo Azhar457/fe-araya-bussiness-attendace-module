@@ -208,11 +208,6 @@ export function getAttendanceMonth(month: string): Promise<M13AttendanceMonth> {
   return request<M13AttendanceMonth>(`/api/attendance?month=${month}`);
 }
 
-/** GET /api/leave-permissions?month=YYYY-MM → riwayat izin/sakit. */
-export function listLeavesMonth(month: string): Promise<LiveLeaveList> {
-  return request<LiveLeaveList>(`/api/leave-permissions?month=${month}`);
-}
-
 /** GET /api/attendance/recap/daily?month=YYYY-MM (HANYA HR) — detail per hari. */
 export function getDailyRecap(month: string): Promise<M13DailyRecap> {
   return request<M13DailyRecap>(`/api/attendance/recap/daily?month=${month}`);
