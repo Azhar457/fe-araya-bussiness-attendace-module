@@ -270,8 +270,8 @@ export function AbsenceFormPage() {
                 value={form.alasan}
                 onChange={(event) => setForm((prev) => ({ ...prev, alasan: event.target.value }))}
               />
-              <span className="self-end text-caption text-muted tabular-nums">{form.alasan.length}/500</span>
             </FormField>
+            <span className="self-end text-caption text-muted tabular-nums">{form.alasan.length}/500</span>
 
             <div className="flex items-center justify-end gap-3">
               <Button
