@@ -328,16 +328,18 @@ export function AbsenceFormPage() {
             <span className="self-end text-caption text-muted tabular-nums">{form.alasan.length}/500</span>
 
             {form.jenis === "sakit" ? (
-              <FormField id="lampiran" label="Lampiran Surat Keterangan Dokter (SKD)" error={errors.file}>
+              <FormField
+                id="lampiran"
+                label="Lampiran Surat Keterangan Dokter (SKD)"
+                error={errors.file}
+                hint="Gambar (JPG/PNG/WEBP) atau PDF, maksimal 5 MB. Wajib untuk sakit lebih dari 1 hari."
+              >
                 <Input
                   id="lampiran"
                   type="file"
                   accept="image/jpeg,image/png,image/webp,application/pdf"
                   onChange={(event) => setForm((prev) => ({ ...prev, file: event.target.files?.[0] ?? null }))}
                 />
-                <span className="text-caption text-muted">
-                  Gambar (JPG/PNG/WEBP) atau PDF, maksimal 5 MB. Wajib untuk sakit lebih dari 1 hari.
-                </span>
               </FormField>
             ) : null}
 
