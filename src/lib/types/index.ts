@@ -219,21 +219,63 @@ export type LiveWorkingHours = {
 /** POST /api/working-hours → 200 (respon = aturan baru tersimpan). */
 export type LiveWorkingHoursResult = LiveWorkingHours & { message: string };
 
-/** POST /api/leave-permissions → 201 */
-export type LiveLeaveResult = { message: string };
+/** POST /api/leave-permissions → 201 (atau 200 bila semua tanggal dilewati/duplikat). */
+export type LiveLeaveResult = {
+  message: string;
+  data: {
+    pengajuan_id: number;
+    mulai: string;
+    selesai: string;
+    jenis: string;
+    dibuat: number;
+    dilewati: number;
+    tanggal_dibuat: string[];
+    tanggal_dilewati: string[];
+  };
+};
 
-/** GET /api/leave-permissions → { success, data: [] } */
+/** Lampiran (mis. SKD) pada satu baris pengajuan. */
+export type LiveLeaveAttachment = { id: number; url: string; uploaded_at?: string | null };
+
+/** GET /api/leave-permissions → { success, data: [] } — 1 baris per tanggal. */
 export type LiveLeaveList = {
   success: boolean;
   data: Array<{
     id?: number;
+    pengajuan_id?: number;
     tanggal: string;
     jenis: string;
     alasan: string;
     created_at?: string;
     status?: string;
+    reviewer_note?: string | null;
+    attachment?: LiveLeaveAttachment | null;
     karyawan_id?: number;
   }>;
+};
+
+/** GET /api/leave-quotas?year=… — kuota cuti tahunan (dari kontrak cuti M12). */
+export type LiveLeaveQuota = {
+  success: boolean;
+  data: {
+    tahun: number;
+    kuota_total: number;
+    terpakai: number;
+    sisa: number;
+    detail_per_jenis: Array<{ jenis: string; kuota: number; terpakai: number }>;
+    pengajuan_lain: Record<string, number>;
+  };
+};
+
+/** GET/PUT /api/profile/contact — kontak darurat. */
+export type LiveEmergencyContact = {
+  success: boolean;
+  data: {
+    nama: string | null;
+    hubungan: string | null;
+    telepon: string | null;
+    updated_at?: string | null;
+  };
 };
 
 /* ================================================================== */

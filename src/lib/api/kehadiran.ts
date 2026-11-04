@@ -19,7 +19,9 @@
 import { request } from "@/lib/api/client";
 import type {
   LiveCheckInResult,
+  LiveEmergencyContact,
   LiveLeaveList,
+  LiveLeaveQuota,
   LiveLeaveResult,
   LiveLoginResult,
   LiveRecap,
@@ -137,9 +139,15 @@ export function checkOut(): Promise<LiveCheckInResult> {
 /* Izin / sakit (US3)                                                */
 /* ------------------------------------------------------------------ */
 
+export type LeaveJenis = "izin" | "sakit" | "tugas_khusus";
+
 export type LeaveInput = {
-  tanggal: string; // YYYY-MM-DD
-  jenis: "izin" | "sakit";
+  /** Satu hari (format lama BE). Isi ATAU mulai+selesai, bukan keduanya. */
+  tanggal?: string; // YYYY-MM-DD
+  /** Rentang multi-hari — BE pecah per hari kerja (Sen–Jin), maks 90. */
+  mulai?: string; // YYYY-MM-DD
+  selesai?: string; // YYYY-MM-DD
+  jenis: LeaveJenis;
   alasan: string;
 };
 
@@ -148,12 +156,32 @@ export function listLeaves(): Promise<LiveLeaveList> {
   return request<LiveLeaveList>("/api/leave-permissions");
 }
 
-/** POST /api/leave-permissions — ajukan izin/sakit (identitas dari token). */
+/** POST /api/leave-permissions — ajukan izin/sakit/tugas khusus (identitas dari token). */
 export function submitLeave(input: LeaveInput): Promise<LiveLeaveResult> {
   return request<LiveLeaveResult>("/api/leave-permissions", {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+/** POST /api/leave-permissions/{id}/attachment — unggah lampiran (multipart, maks 5MB, gambar/PDF). */
+export function uploadLeaveAttachment(leaveId: number, file: File): Promise<{ message: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  return request(`/api/leave-permissions/${leaveId}/attachment`, {
+    method: "POST",
+    body: form,
+  });
+}
+
+/** GET /api/leave-quotas?year=… — sisa cuti tahunan. */
+export function listLeaveQuotas(tahun: number): Promise<LiveLeaveQuota> {
+  return request<LiveLeaveQuota>(`/api/leave-quotas?year=${tahun}`);
+}
+
+/** GET /api/profile/contact — kontak darurat. */
+export function getEmergencyContact(): Promise<LiveEmergencyContact> {
+  return request<LiveEmergencyContact>("/api/profile/contact");
 }
 
 /* ------------------------------------------------------------------ */

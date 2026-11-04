@@ -1,28 +1,49 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
-import { CalendarDays, Inbox } from "lucide-react";
+import { Briefcase, CalendarDays, Download, Inbox, Paperclip, Stethoscope } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, type Column } from "@/components/ui/Table";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, downloadFile } from "@/lib/api/client";
 import { listLeaves } from "@/lib/api/kehadiran";
 import { formatDate } from "@/lib/format";
 import type { LiveLeaveList } from "@/lib/types";
 
 type LeaveRow = LiveLeaveList["data"][number];
 
+/** Satu pengajuan (pengajuan_id) — BE menyimpan 1 baris per tanggal. */
+type Pengajuan = {
+  key: string;
+  mulai: string;
+  selesai: string;
+  jumlah: number;
+  jenis: string;
+  alasan: string;
+  status?: string;
+  reviewerNote?: string | null;
+  attachment?: LeaveRow["attachment"];
+};
+
+const JENIS_LABEL: Record<string, string> = {
+  izin: "Izin Pribadi",
+  sakit: "Sakit",
+  tugas_khusus: "Tugas Khusus",
+};
+
 /**
- * M13-US3 — riwayat pengajuan izin/sakit milik karyawan (tabel penuh).
- * Sumber data BE LIVE: listLeaves (GET /api/leave-permissions, Bearer token M12).
+ * M13-US3 — riwayat pengajuan izin/sakit/tugas khusus milik karyawan.
+ * Baris per-tanggal dari BE dikelompokkan per pengajuan_id agar rentang
+ * multi-hari tampil sebagai satu pengajuan.
  */
 export function AbsenceHistoryPage() {
   const [rows, setRows] = useState<LeaveRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,18 +62,69 @@ export function AbsenceHistoryPage() {
     void load();
   }, [load]);
 
-  const sorted = [...rows].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+  const pengajuanList = useMemo<Pengajuan[]>(() => {
+    const byId = new Map<string, LeaveRow[]>();
+    for (const row of rows) {
+      const key = String(row.pengajuan_id ?? row.id ?? row.tanggal);
+      const bucket = byId.get(key);
+      if (bucket) bucket.push(row);
+      else byId.set(key, [row]);
+    }
+    return [...byId.entries()]
+      .map(([key, group]) => {
+        const sorted = [...group].sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+        const withAttachment = sorted.find((row) => row.attachment);
+        return {
+          key,
+          mulai: sorted[0].tanggal,
+          selesai: sorted[sorted.length - 1].tanggal,
+          jumlah: sorted.length,
+          jenis: sorted[0].jenis,
+          alasan: sorted[0].alasan,
+          status: sorted[0].status,
+          reviewerNote: sorted[0].reviewer_note,
+          attachment: withAttachment?.attachment ?? null,
+        };
+      })
+      .sort((a, b) => b.mulai.localeCompare(a.mulai));
+  }, [rows]);
 
-  const columns: Column<LeaveRow>[] = [
+  async function unduhLampiran(p: Pengajuan) {
+    if (!p.attachment) return;
+    setDownloading(p.key);
+    try {
+      const ekstensi = p.attachment.url.endsWith(".pdf") ? "pdf" : "jpg";
+      await downloadFile(p.attachment.url, `SKD-${p.mulai}.${ekstensi}`);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Gagal mengunduh lampiran.");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  const columns: Column<Pengajuan>[] = [
     {
       key: "tanggal",
       header: "Tanggal",
-      render: (row) => <span className="text-body text-text tabular-nums">{formatDate(row.tanggal)}</span>,
+      render: (row) => (
+        <span className="text-body text-text tabular-nums">
+          {row.jumlah > 1 ? `${formatDate(row.mulai)} – ${formatDate(row.selesai)}` : formatDate(row.mulai)}
+          {row.jumlah > 1 ? <span className="text-caption text-muted"> · {row.jumlah} hari</span> : null}
+        </span>
+      ),
     },
     {
       key: "jenis",
       header: "Jenis",
-      render: (row) => <span className="text-body capitalize text-text">{row.jenis}</span>,
+      render: (row) => {
+        const Icon = row.jenis === "sakit" ? Stethoscope : row.jenis === "tugas_khusus" ? Briefcase : CalendarDays;
+        return (
+          <span className="flex items-center gap-2 text-body text-text">
+            <Icon aria-hidden size={15} className="text-muted" />
+            {JENIS_LABEL[row.jenis] ?? row.jenis}
+          </span>
+        );
+      },
     },
     {
       key: "alasan",
@@ -63,7 +135,36 @@ export function AbsenceHistoryPage() {
       key: "status",
       header: "Status",
       render: (row) =>
-        row.status ? <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge> : <span className="text-body text-muted">—</span>,
+        row.status ? (
+          <span className="flex flex-col gap-1 items-start">
+            <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>
+            {row.reviewerNote ? (
+              <span className="text-caption text-muted">Catatan: {row.reviewerNote}</span>
+            ) : null}
+          </span>
+        ) : (
+          <span className="text-body text-muted">—</span>
+        ),
+    },
+    {
+      key: "lampiran",
+      header: "Lampiran",
+      render: (row) =>
+        row.attachment ? (
+          <button
+            type="button"
+            onClick={() => void unduhLampiran(row)}
+            disabled={downloading === row.key}
+            className="inline-flex items-center gap-1 text-label text-primary hover:text-primary-hover disabled:opacity-50"
+          >
+            {downloading === row.key ? <Inbox aria-hidden size={14} /> : <Download aria-hidden size={14} />}
+            Unduh
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-caption text-muted">
+            <Paperclip aria-hidden size={13} /> —
+          </span>
+        ),
     },
   ];
 
@@ -86,7 +187,7 @@ export function AbsenceHistoryPage() {
             Coba lagi
           </button>
         </Card>
-      ) : sorted.length === 0 ? (
+      ) : pengajuanList.length === 0 ? (
         <Card className="flex flex-col items-center gap-4 p-10 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-surface-2 text-muted">
             <CalendarDays aria-hidden size={24} />
@@ -106,8 +207,8 @@ export function AbsenceHistoryPage() {
         <Table
           caption="Riwayat pengajuan izin/sakit"
           columns={columns}
-          rows={sorted}
-          rowKey={(row) => `${row.tanggal}-${row.jenis}-${row.id ?? row.alasan}`}
+          rows={pengajuanList}
+          rowKey={(row) => row.key}
         />
       )}
     </div>

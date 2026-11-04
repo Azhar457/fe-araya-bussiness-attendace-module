@@ -2,7 +2,17 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, ClipboardList, Plus, Send, Stethoscope, type LucideIcon } from "lucide-react";
+import {
+  Briefcase,
+  CalendarDays,
+  ClipboardList,
+  Paperclip,
+  Phone,
+  Plus,
+  Send,
+  Stethoscope,
+  type LucideIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -10,23 +20,31 @@ import { FormField, Input, Textarea } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/client";
-import { listLeaves, submitLeave } from "@/lib/api/kehadiran";
+import {
+  getEmergencyContact,
+  listLeaves,
+  listLeaveQuotas,
+  submitLeave,
+  uploadLeaveAttachment,
+  type LeaveJenis,
+} from "@/lib/api/kehadiran";
 import { wibNow } from "@/lib/format";
-import type { LiveLeaveList } from "@/lib/types";
+import type { LiveEmergencyContact, LiveLeaveList, LiveLeaveQuota } from "@/lib/types";
 
 type LeaveRow = LiveLeaveList["data"][number];
 
-type Jenis = "izin" | "sakit";
+type JenisOption = { value: LeaveJenis; label: string; desc: string; icon: LucideIcon };
 
-const JENIS_OPTIONS: Array<{ value: Jenis; label: string; desc: string; icon: LucideIcon }> = [
+const JENIS_OPTIONS: JenisOption[] = [
   { value: "izin", label: "Izin Pribadi", desc: "Keperluan keluarga / pribadi", icon: ClipboardList },
   { value: "sakit", label: "Sakit", desc: "Dengan / tanpa surat dokter", icon: Stethoscope },
+  { value: "tugas_khusus", label: "Tugas Khusus", desc: "Dinas luar / penugasan kantor", icon: Briefcase },
 ];
 
-const EMPTY = { mulai: "", selesai: "", jenis: "izin" as Jenis, alasan: "" };
+const EMPTY = { mulai: "", selesai: "", jenis: "izin" as LeaveJenis, alasan: "", file: null as File | null };
 
-/** Batas aman: mencegah loop POST berhari-hari tak terkendali. */
-const MAKS_HARI = 31;
+/** Sama dengan batas BE (MAX_RENTANG_HARI). */
+const MAKS_HARI = 90;
 
 /** Daftar hari kerja (Sen–Jin) dalam rentang inklusif, format YYYY-MM-DD. */
 function workdays(mulai: string, selesai: string): string[] {
@@ -42,22 +60,21 @@ function workdays(mulai: string, selesai: string): string[] {
 }
 
 /**
- * M13-US3 — form pengajuan izin/sakit (karyawan) + riwayat terkini.
- * Data 100% dari BE LIVE: listLeaves (GET) + submitLeave (POST /api/leave-permissions).
- *
- * Kontrak BE menerima satu tanggal per POST → rentang multi-hari dikirim
- * sebagai beberapa POST (satu per hari kerja). Lampiran, kontak darurat,
- * dan kuota cuti/SKD belum ada endpoint-nya di BE — tidak dipalsukan di FE.
+ * M13-US3 — form pengajuan izin/sakit/tugas khusus (karyawan) + riwayat terkini.
+ * Data 100% dari BE LIVE: submitLeave (POST /api/leave-permissions, rentang
+ * dipecah BE per hari kerja), uploadLeaveAttachment (lampiran SKD),
+ * listLeaveQuotas (sisa cuti), getEmergencyContact (kontak darurat).
  */
 export function AbsenceFormPage() {
   const { push } = useToast();
   const [form, setForm] = useState(EMPTY);
-  const [errors, setErrors] = useState<Partial<Record<"mulai" | "selesai" | "alasan", string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<"mulai" | "selesai" | "alasan" | "file", string>>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const [quota, setQuota] = useState<LiveLeaveQuota["data"] | null>(null);
+  const [kontak, setKontak] = useState<LiveEmergencyContact["data"] | null>(null);
 
   const todayKey = wibNow().dateKey;
 
@@ -76,6 +93,8 @@ export function AbsenceFormPage() {
 
   useEffect(() => {
     void load();
+    listLeaveQuotas(new Date().getFullYear()).then((q) => setQuota(q.data)).catch(() => undefined);
+    getEmergencyContact().then((k) => setKontak(k.data)).catch(() => undefined);
   }, [load]);
 
   const durasi = useMemo(
@@ -83,7 +102,7 @@ export function AbsenceFormPage() {
     [form.mulai, form.selesai],
   );
 
-  function validate(): string[] | null {
+  function validate(): boolean {
     const next: typeof errors = {};
     if (!form.mulai) next.mulai = "Tanggal mulai wajib diisi.";
     else if (form.mulai < todayKey) next.mulai = "Tanggal tidak boleh lebih dulu dari hari ini.";
@@ -98,61 +117,96 @@ export function AbsenceFormPage() {
 
     if (!form.alasan.trim()) next.alasan = "Alasan tidak boleh kosong.";
 
+    if (form.file) {
+      const okTipe = ["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(form.file.type);
+      const okUkuran = form.file.size <= 5 * 1024 * 1024;
+      if (!okTipe) next.file = "Lampiran harus gambar (JPG/PNG/WEBP) atau PDF.";
+      else if (!okUkuran) next.file = "Ukuran lampiran maksimal 5 MB.";
+    }
+
     setErrors(next);
-    if (Object.keys(next).length > 0) return null;
-    return workdays(form.mulai, form.selesai);
+    return Object.keys(next).length === 0;
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const days = validate();
-    if (!days) return;
+    if (!validate()) return;
 
     setSubmitting(true);
-    setProgress({ done: 0, total: days.length });
-    let ok = 0;
-    let duplikat = 0;
-    const gagal: string[] = [];
-
-    for (const [index, tanggal] of days.entries()) {
-      setProgress({ done: index, total: days.length });
-      try {
-        await submitLeave({ tanggal, jenis: form.jenis, alasan: form.alasan.trim() });
-        ok += 1;
-      } catch (caught) {
-        if (caught instanceof ApiError && caught.code === "LEAVE_ALREADY_EXISTS") duplikat += 1;
-        else gagal.push(`${tanggal}: ${caught instanceof ApiError ? caught.message : "gagal mengirim"}`);
-      }
-    }
-    setProgress({ done: days.length, total: days.length });
-
-    if (ok > 0) {
-      push({
-        variant: gagal.length > 0 ? "info" : "success",
-        title: `${ok} hari pengajuan terkirim`,
-        description:
-          gagal.length > 0
-            ? `${duplikat} hari sudah pernah diajukan, ${gagal.length} hari gagal. Cek detail di riwayat.`
-            : "Menunggu verifikasi Admin HR (1×24 jam).",
+    try {
+      const result = await submitLeave({
+        mulai: form.mulai,
+        selesai: form.selesai,
+        jenis: form.jenis,
+        alasan: form.alasan.trim(),
       });
-    } else {
+      const { dibuat, dilewati, pengajuan_id } = result.data;
+
+      // Lampiran (SKD) diunggah ke baris pertama pengajuan ini.
+      let lampiranGagal = false;
+      if (form.file && dibuat > 0) {
+        try {
+          const list = await listLeaves();
+          const target = (list.data ?? []).find((row) => row.pengajuan_id === pengajuan_id);
+          if (target?.id) await uploadLeaveAttachment(target.id, form.file);
+          else lampiranGagal = true;
+        } catch {
+          lampiranGagal = true;
+        }
+      }
+
+      if (dibuat === 0) {
+        push({
+          variant: "info",
+          title: "Tidak ada hari baru yang diajukan",
+          description: `${dilewati} hari sudah pernah diajukan sebelumnya.`,
+        });
+      } else {
+        push({
+          variant: lampiranGagal ? "info" : "success",
+          title: `${dibuat} hari pengajuan terkirim`,
+          description: lampiranGagal
+            ? "Pengajuan tersimpan, tetapi lampiran gagal diunggah. Coba unggah ulang dari riwayat."
+            : dilewati > 0
+              ? `${dilewati} hari dilewati karena sudah pernah diajukan. Menunggu verifikasi Admin HR (1×24 jam).`
+              : "Menunggu verifikasi Admin HR (1×24 jam).",
+        });
+      }
+
+      setForm(EMPTY);
+      setErrors({});
+      await load();
+    } catch (caught) {
       push({
         variant: "danger",
         title: "Pengajuan gagal",
-        description: duplikat > 0 ? "Semua tanggal sudah pernah diajukan." : gagal[0] ?? "Coba lagi.",
+        description: caught instanceof ApiError ? caught.message : "Coba lagi.",
       });
+    } finally {
+      setSubmitting(false);
     }
-
-    setForm(EMPTY);
-    setErrors({});
-    setSubmitting(false);
-    await load();
   }
 
-  const latest = useMemo(
-    () => [...leaves].sort((a, b) => b.tanggal.localeCompare(a.tanggal)).slice(0, 3),
-    [leaves],
-  );
+  const latest = useMemo(() => {
+    // Satu pengajuan (pengajuan_id) = satu entri riwayat; ambil tanggal terakhir & pertama.
+    const byPengajuan = new Map<number, LeaveRow[]>();
+    for (const row of leaves) {
+      const key = row.pengajuan_id ?? row.id ?? 0;
+      const bucket = byPengajuan.get(key);
+      if (bucket) bucket.push(row);
+      else byPengajuan.set(key, [row]);
+    }
+    return [...byPengajuan.values()]
+      .map((rows) => rows.sort((a, b) => a.tanggal.localeCompare(b.tanggal)))
+      .sort((a, b) => b[0].tanggal.localeCompare(a[0].tanggal))
+      .slice(0, 3);
+  }, [leaves]);
+
+  const jenisLabel: Record<LeaveJenis, string> = {
+    izin: "Izin Pribadi",
+    sakit: "Sakit",
+    tugas_khusus: "Tugas Khusus",
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -162,8 +216,8 @@ export function AbsenceFormPage() {
           title="Ajukan Izin & Sakit"
         />
         <p className="text-body text-muted">
-          Formulir permohonan ketidakhadiran mandiri untuk keperluan izin pribadi, atau sakit resmi
-          dengan surat keterangan dokter.
+          Formulir permohonan ketidakhadiran mandiri untuk keperluan izin pribadi, sakit resmi dengan
+          surat keterangan dokter, atau tugas khusus dari kantor.
         </p>
       </div>
 
@@ -190,7 +244,7 @@ export function AbsenceFormPage() {
               <legend className="text-label text-text">
                 Jenis Pengajuan <span className="text-danger-fg" aria-hidden>*</span>
               </legend>
-              <div role="radiogroup" aria-label="Jenis Pengajuan" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div role="radiogroup" aria-label="Jenis Pengajuan" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {JENIS_OPTIONS.map((option) => {
                   const selected = form.jenis === option.value;
                   const Icon = option.icon;
@@ -256,7 +310,7 @@ export function AbsenceFormPage() {
                 <span className="text-label text-primary">
                   Total Durasi Pengajuan: {durasi} Hari Kerja
                 </span>
-                <span className="text-caption text-muted">Sabtu & Minggu tidak dihitung</span>
+                <span className="text-caption text-muted">Sabtu &amp; Minggu tidak dihitung</span>
               </div>
             ) : null}
 
@@ -273,6 +327,20 @@ export function AbsenceFormPage() {
             </FormField>
             <span className="self-end text-caption text-muted tabular-nums">{form.alasan.length}/500</span>
 
+            {form.jenis === "sakit" ? (
+              <FormField id="lampiran" label="Lampiran Surat Keterangan Dokter (SKD)" error={errors.file}>
+                <Input
+                  id="lampiran"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={(event) => setForm((prev) => ({ ...prev, file: event.target.files?.[0] ?? null }))}
+                />
+                <span className="text-caption text-muted">
+                  Gambar (JPG/PNG/WEBP) atau PDF, maksimal 5 MB. Wajib untuk sakit lebih dari 1 hari.
+                </span>
+              </FormField>
+            ) : null}
+
             <div className="flex items-center justify-end gap-3">
               <Button
                 type="button"
@@ -288,9 +356,7 @@ export function AbsenceFormPage() {
                 type="submit"
                 variant="primary"
                 loading={submitting}
-                loadingText={
-                  progress.total > 1 ? `Mengirim ${progress.done + 1}/${progress.total}…` : "Mengirim…"
-                }
+                loadingText="Mengirim…"
                 leftIcon={<Send aria-hidden size={18} />}
               >
                 Kirim Pengajuan
@@ -299,7 +365,7 @@ export function AbsenceFormPage() {
           </form>
         </Card>
 
-        {/* Kolom kanan: aturan singkat + riwayat terkini. */}
+        {/* Kolom kanan: aturan + kuota + kontak darurat + riwayat terkini. */}
         <div className="flex flex-col gap-5 lg:col-span-5">
           <Card className="flex flex-col gap-3 p-5">
             <div className="flex items-center gap-2">
@@ -329,11 +395,39 @@ export function AbsenceFormPage() {
             </Link>
           </Card>
 
+          {quota ? (
+            <Card className="flex flex-col gap-2 p-5">
+              <h2 className="text-h3 text-text">Sisa Cuti Tahunan {quota.tahun}</h2>
+              <div className="flex items-baseline gap-2">
+                <span className="text-h1 text-primary tabular-nums">{quota.sisa}</span>
+                <span className="text-body text-muted">/ {quota.kuota_total} hari</span>
+              </div>
+              <p className="text-caption text-muted">
+                Terpakai {quota.terpakai} hari • Izin {quota.pengajuan_lain.izin ?? 0}× • Sakit{" "}
+                {quota.pengajuan_lain.sakit ?? 0}× • Tugas khusus {quota.pengajuan_lain.tugas_khusus ?? 0}×
+              </p>
+            </Card>
+          ) : null}
+
+          {kontak?.nama ? (
+            <Card className="flex flex-col gap-2 p-5">
+              <div className="flex items-center gap-2">
+                <Phone aria-hidden size={18} className="text-primary" />
+                <h2 className="text-h3 text-text">Kontak Darurat</h2>
+              </div>
+              <p className="text-body text-text">
+                {kontak.nama}
+                {kontak.hubungan ? <span className="text-muted"> — {kontak.hubungan}</span> : null}
+              </p>
+              <p className="text-body text-muted tabular-nums">{kontak.telepon}</p>
+            </Card>
+          ) : null}
+
           <Card className="flex flex-col gap-3 p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-h3 text-text">Riwayat Pengajuan Terkini</h2>
               {!listLoading && !listError && leaves.length > 0 ? (
-                <Badge tone="neutral">{`${Math.min(leaves.length, 3)} terakhir`}</Badge>
+                <Badge tone="neutral">3 terakhir</Badge>
               ) : null}
             </div>
 
@@ -345,32 +439,38 @@ export function AbsenceFormPage() {
               <p className="text-body text-muted">Belum ada pengajuan izin/sakit.</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {latest.map((row, index) => {
-                  const Icon = row.jenis === "sakit" ? Stethoscope : ClipboardList;
+                {latest.map((rows) => {
+                  const first = rows[0];
+                  const Icon =
+                    first.jenis === "sakit" ? Stethoscope : first.jenis === "tugas_khusus" ? Briefcase : ClipboardList;
+                  const jenis = jenisLabel[first.jenis as LeaveJenis] ?? first.jenis;
+                  const rentang =
+                    rows.length > 1 ? `${rows[0].tanggal} – ${rows[rows.length - 1].tanggal}` : rows[0].tanggal;
                   return (
                     <div
-                      key={`${row.tanggal}-${row.jenis}-${index}`}
+                      key={first.pengajuan_id ?? first.id}
                       className="flex items-center justify-between gap-3 rounded-lg bg-surface-2 p-3"
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <span
                           aria-hidden
                           className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
-                            row.jenis === "sakit" ? "bg-danger-soft text-danger-fg" : "bg-primary-soft text-primary"
+                            first.jenis === "sakit" ? "bg-danger-soft text-danger-fg" : "bg-primary-soft text-primary"
                           }`}
                         >
                           <Icon size={16} />
                         </span>
                         <div className="flex min-w-0 flex-col">
-                          <span className="text-label text-text capitalize">
-                            {row.jenis === "sakit" ? "Sakit" : "Izin Pribadi"}
+                          <span className="text-label text-text">
+                            {jenis}
+                            {rows.length > 1 ? ` • ${rows.length} hari` : ""}
                           </span>
-                          <span className="text-caption text-muted">
-                            {row.tanggal} • {row.alasan ? `${row.alasan.slice(0, 40)}${row.alasan.length > 40 ? "…" : ""}` : "—"}
+                          <span className="text-caption text-muted tabular-nums">
+                            {rentang} • {first.alasan ? `${first.alasan.slice(0, 40)}${first.alasan.length > 40 ? "…" : ""}` : "—"}
                           </span>
                         </div>
                       </div>
-                      {row.status ? <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge> : null}
+                      {first.status ? <Badge tone={statusTone(first.status)}>{statusLabel(first.status)}</Badge> : null}
                     </div>
                   );
                 })}

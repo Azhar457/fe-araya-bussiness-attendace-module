@@ -66,6 +66,27 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${rawPath}${search}`;
 }
 
+/** Unduh file dari BE M13 (butuh Bearer) lalu simpan sebagai file browser. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      headers: { Authorization: `Bearer ${readTokenCookie(M13_TOKEN_COOKIE)}` },
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "NETWORK_ERROR", "Koneksi terputus. Coba lagi.");
+  }
+  if (!response.ok) throw new ApiError(response.status, "BE_ERROR", "Gagal mengunduh lampiran.");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function request<T>(
   path: string,
   init?: RequestInit,
@@ -76,7 +97,8 @@ export async function request<T>(
   const target = isLocal ? path : apiUrl(path);
 
   const buildHeaders = (token: string): Record<string, string> => ({
-    ...(init?.body ? { "Content-Type": "application/json" } : {}),
+    // FormData → biarkan browser set Content-Type + boundary multipart sendiri.
+    ...(init?.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
     ...(init?.headers ? Object.fromEntries(new Headers(init.headers).entries()) : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   });
