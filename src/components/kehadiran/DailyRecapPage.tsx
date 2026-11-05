@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { CalendarDays, ChevronDown, Inbox } from "lucide-react";
+import { CalendarDays, Inbox } from "lucide-react";
+import { AttendanceMap, type MapDay } from "@/components/kehadiran/AttendanceMap";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { FormField, Select } from "@/components/ui/FormField";
@@ -11,7 +12,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Table, type Column } from "@/components/ui/Table";
 import { ApiError } from "@/lib/api/client";
 import { getDailyRecap } from "@/lib/api/kehadiran";
-import { currentMonth, formatDate, formatMonthLabel, formatTime, lastMonths } from "@/lib/format";
+import { currentMonth, formatDate, formatMonthLabel, formatTime, lastMonths, wibNow } from "@/lib/format";
 import type { M13DailyRecap } from "@/lib/types";
 
 const BULAN_LIST = lastMonths();
@@ -34,12 +35,14 @@ type DailyRow = M13DailyRecap["data"]["items"][number];
 export function DailyRecapPage() {
   const [month, setMonth] = useState(currentMonth());
   const [items, setItems] = useState<DailyRow[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback((m: string) => {
     setLoading(true);
     setError(null);
+    setSelected(null);
     getDailyRecap(m)
       .then((result) => {
         setItems(
@@ -69,8 +72,15 @@ export function DailyRecapPage() {
   }, [month, load]);
 
   const groups = useMemo(() => {
+    const hariIni = wibNow().dateKey;
     const map = new Map<string, DailyRow[]>();
     for (const row of items) {
+      // BE mengirim grid penuh bulan (termasuk tanggal mendatang & akhir pekan).
+      // Tanggal mendatang selalu "alpa" dan akhir pekan memang libur — jangan
+      // ditampilkan sebagai pelanggaran.
+      if (row.tanggal > hariIni) continue;
+      const hari = new Date(`${row.tanggal}T00:00:00Z`).getUTCDay();
+      if (hari === 0 || hari === 6) continue;
       const arr = map.get(row.tanggal) ?? [];
       arr.push(row);
       map.set(row.tanggal, arr);
@@ -120,15 +130,47 @@ export function DailyRecapPage() {
     },
   ];
 
+  const activeDate = selected ?? groups[0]?.[0] ?? null;
+  const activeRows = activeDate ? (groups.find(([date]) => date === activeDate)?.[1] ?? []) : [];
+
+  // Isi sel peta: jumlah karyawan masuk/telat/cuti/alpa per tanggal.
+  const mapDays = useMemo<Record<string, MapDay>>(() => {
+    const perTanggal = new Map<string, { hadir: number; terlambat: number; lain: number; alpa: number }>();
+    for (const row of items) {
+      const hitung = perTanggal.get(row.tanggal) ?? { hadir: 0, terlambat: 0, lain: 0, alpa: 0 };
+      if (row.status === "hadir") hitung.hadir += 1;
+      else if (row.status === "terlambat") hitung.terlambat += 1;
+      else if (row.status === "alpa") hitung.alpa += 1;
+      else hitung.lain += 1;
+      perTanggal.set(row.tanggal, hitung);
+    }
+
+    const result: Record<string, MapDay> = {};
+    for (const [date, hitung] of perTanggal) {
+      const masuk = hitung.hadir + hitung.terlambat;
+      const cuti = hitung.lain > 0 ? ` · ${hitung.lain} cuti` : "";
+      result[date] = {
+        tone: masuk > 0 ? (hitung.terlambat > 0 ? "pending" : "success") : hitung.alpa > 0 ? "danger" : "info",
+        label:
+          masuk > 0
+            ? `${masuk} masuk${hitung.terlambat > 0 ? ` · ${hitung.terlambat} telat` : ""}${cuti}`
+            : hitung.alpa > 0
+              ? `${hitung.alpa} alpa${cuti}`
+              : `${hitung.lain} cuti`,
+      };
+    }
+    return result;
+  }, [items]);
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         breadcrumb={[
           { label: "Kehadiran", href: "/kehadiran/pengaturan" },
           { label: "Rekap kehadiran", href: "/kehadiran/rekap" },
-          { label: "Detail per hari" },
+          { label: "Rekap harian" },
         ]}
-        title="Rekapitulasi Detail per Hari"
+        title="Rekap Harian"
       />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -165,7 +207,7 @@ export function DailyRecapPage() {
             Coba lagi
           </button>
         </Card>
-      ) : items.length === 0 ? (
+      ) : groups.length === 0 ? (
         <Card className="flex flex-col items-center gap-4 p-10 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-surface-2 text-muted">
             <CalendarDays aria-hidden size={24} />
@@ -173,54 +215,38 @@ export function DailyRecapPage() {
           <p className="text-body text-muted">Belum ada data kehadiran di {formatMonthLabel(month)}.</p>
         </Card>
       ) : (
-        <div className="flex flex-col gap-3">
-          {groups.map(([date, rows], index) => (
-            <DaySection key={date} date={date} rows={rows} columns={columns} defaultOpen={index === 0} />
-          ))}
+        /* Peta kehadiran bulan berjalan; klik tanggal untuk melihat tabel
+           karyawan hari itu di bawahnya. */
+        <div className="flex flex-col gap-4">
+          <AttendanceMap
+            month={month}
+            days={mapDays}
+            selected={activeDate}
+            onSelect={(date) => setSelected(date)}
+          />
+
+          <div className="flex flex-col gap-2">
+            {activeDate ? (
+              <>
+                <h2 className="text-h3 text-text">
+                  {formatDate(activeDate)}
+                  <span className="ml-2 text-caption text-muted">
+                    {activeRows.length} karyawan tercatat
+                  </span>
+                </h2>
+                <Table
+                  caption={`Detail kehadiran ${formatDate(activeDate)}`}
+                  columns={columns}
+                  rows={activeRows}
+                  rowKey={(row) => `${row.tanggal}-${row.karyawanId}`}
+                />
+              </>
+            ) : (
+              <p className="text-body text-muted">Pilih tanggal pada peta di atas.</p>
+            )}
+          </div>
         </div>
       )}
     </div>
-  );
-}
-
-/** Satu tanggal = satu accordion (default tertutup, terbaru terbuka). */
-function DaySection({
-  date,
-  rows,
-  columns,
-  defaultOpen,
-}: {
-  date: string;
-  rows: DailyRow[];
-  columns: Column<DailyRow>[];
-  defaultOpen: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <details
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-      className="rounded-lg border border-line bg-surface"
-    >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-        <span className="text-h3 text-text">
-          {formatDate(date)}
-          <span className="ml-2 text-caption text-muted">{rows.length} karyawan tercatat</span>
-        </span>
-        <ChevronDown
-          aria-hidden
-          size={18}
-          className={`shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </summary>
-      <div className="border-t border-line">
-        <Table
-          caption={`Detail kehadiran ${formatDate(date)}`}
-          columns={columns}
-          rows={rows}
-          rowKey={(row) => `${row.tanggal}-${row.karyawanId}`}
-        />
-      </div>
-    </details>
   );
 }

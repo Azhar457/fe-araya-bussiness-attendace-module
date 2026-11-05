@@ -62,6 +62,10 @@ export function formatDateTime(input: string | Date): string {
 export function formatTime(input: string): string {
   const hm = /^(\d{2}):(\d{2})/.exec(input);
   if (hm && !input.includes("T")) return `${hm[1]}.${hm[2]} WIB`;
+  // Toleran terhadap ISO dari BE yang kadang menambah ":00" setelah detik
+  // (mis. "2026-11-05T08:00:05:00+07:00") — ambil jam:menit setelah "T".
+  const iso = /T(\d{2}):(\d{2})/.exec(input);
+  if (iso) return `${iso[1]}.${iso[2]} WIB`;
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) return "—";
   const t = new Intl.DateTimeFormat("en-GB", {

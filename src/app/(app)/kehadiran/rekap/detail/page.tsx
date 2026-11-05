@@ -1,8 +1,6 @@
-import { DailyRecapPage } from "@/components/kehadiran/DailyRecapPage";
-import { requireRole } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 
-/** M13-US5 — rekapitulasi detail per hari, hanya Admin HR. */
-export default async function RekapDetailPage() {
-  await requireRole("admin_hr");
-  return <DailyRecapPage />;
+/** URL lama /kehadiran/rekap/detail → /kehadiran/rekap/daily. */
+export default function RekapDetailRedirect() {
+  redirect("/kehadiran/rekap/daily");
 }
