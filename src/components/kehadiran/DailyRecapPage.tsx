@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { CalendarDays, Inbox } from "lucide-react";
+import { CalendarDays, ChevronDown, Inbox } from "lucide-react";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { FormField, Select } from "@/components/ui/FormField";
@@ -173,25 +173,54 @@ export function DailyRecapPage() {
           <p className="text-body text-muted">Belum ada data kehadiran di {formatMonthLabel(month)}.</p>
         </Card>
       ) : (
-        <div className="flex flex-col gap-5">
-          {groups.map(([date, rows]) => (
-            <section key={date} aria-label={date} className="flex flex-col gap-2">
-              <h2 className="text-h3 text-text">
-                {formatDate(date)}
-                <span className="ml-2 text-caption text-muted">
-                  {rows.length} karyawan tercatat
-                </span>
-              </h2>
-              <Table
-                caption={`Detail kehadiran ${formatDate(date)}`}
-                columns={columns}
-                rows={rows}
-                rowKey={(row) => `${row.tanggal}-${row.karyawanId}`}
-              />
-            </section>
+        <div className="flex flex-col gap-3">
+          {groups.map(([date, rows], index) => (
+            <DaySection key={date} date={date} rows={rows} columns={columns} defaultOpen={index === 0} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/** Satu tanggal = satu accordion (default tertutup, terbaru terbuka). */
+function DaySection({
+  date,
+  rows,
+  columns,
+  defaultOpen,
+}: {
+  date: string;
+  rows: DailyRow[];
+  columns: Column<DailyRow>[];
+  defaultOpen: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <details
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      className="rounded-lg border border-line bg-surface"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="text-h3 text-text">
+          {formatDate(date)}
+          <span className="ml-2 text-caption text-muted">{rows.length} karyawan tercatat</span>
+        </span>
+        <ChevronDown
+          aria-hidden
+          size={18}
+          className={`shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </summary>
+      <div className="border-t border-line">
+        <Table
+          caption={`Detail kehadiran ${formatDate(date)}`}
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => `${row.tanggal}-${row.karyawanId}`}
+        />
+      </div>
+    </details>
   );
 }
