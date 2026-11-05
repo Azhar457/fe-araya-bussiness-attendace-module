@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Banner } from "@/components/ui/Banner";
+import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { FormField, Select } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, type Column } from "@/components/ui/Table";
 import { ApiError } from "@/lib/api/client";
-import { getRecap } from "@/lib/api/kehadiran";
-import { currentMonth, formatMonthLabel } from "@/lib/format";
-import type { LiveRecap } from "@/lib/types";
+import { getAttendanceMonth, getRecap } from "@/lib/api/kehadiran";
+import { currentMonth, formatDate, formatMonthLabel, formatTime } from "@/lib/format";
+import type { LiveRecap, M13AttendanceMonth } from "@/lib/types";
 
 const BULAN_LABEL = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -21,6 +22,7 @@ const TAHUN_LIST = [2025, 2026, 2027];
 
 type RecapRow = NonNullable<LiveRecap["data"]>["rekap"][number];
 type RecapViewRow = RecapRow & { nama: string };
+type DailyRow = M13AttendanceMonth["items"][number];
 
 const KATEGORI_LABEL: Record<string, string> = {
   hadir: "Hadir",
@@ -29,6 +31,47 @@ const KATEGORI_LABEL: Record<string, string> = {
   cuti: "Cuti",
   alpa: "Alpa",
 };
+
+/** Label + tone badge per status presensi harian. */
+const STATUS_HARIAN: Record<string, { label: string; tone: "success" | "pending" | "info" | "danger" | "neutral" }> = {
+  hadir: { label: "Hadir", tone: "success" },
+  terlambat: { label: "Terlambat", tone: "pending" },
+  izin: { label: "Izin", tone: "info" },
+  sakit: { label: "Sakit", tone: "info" },
+  cuti: { label: "Cuti", tone: "info" },
+  alpa: { label: "Alpa", tone: "danger" },
+};
+
+const DAILY_COLUMNS: Column<DailyRow>[] = [
+  {
+    key: "tanggal",
+    header: "Tanggal",
+    render: (row) => <span className="text-body text-text tabular-nums">{formatDate(row.date)}</span>,
+  },
+  {
+    key: "status",
+    header: "Status",
+    render: (row) => {
+      const status = row.status ? STATUS_HARIAN[row.status] : undefined;
+      if (!status) return <span className="text-body text-muted">—</span>;
+      const label =
+        row.status === "terlambat" && row.lateMinutes > 0
+          ? `${status.label} +${row.lateMinutes} mnt`
+          : status.label;
+      return <Badge tone={status.tone}>{label}</Badge>;
+    },
+  },
+  {
+    key: "masuk",
+    header: "Jam Masuk",
+    render: (row) => <span className="text-body text-text tabular-nums">{row.checkInAt ? formatTime(row.checkInAt) : "—"}</span>,
+  },
+  {
+    key: "keluar",
+    header: "Jam Keluar",
+    render: (row) => <span className="text-body text-text tabular-nums">{row.checkOutAt ? formatTime(row.checkOutAt) : "—"}</span>,
+  },
+];
 
 function defaultBulanTahun(): { bulan: number; tahun: number } {
   const [tahun, bulan] = currentMonth().split("-").map(Number);
@@ -55,6 +98,7 @@ export function MonthlySummaryPage({
   const [bulan, setBulan] = useState(initial.bulan);
   const [tahun, setTahun] = useState(initial.tahun);
   const [recap, setRecap] = useState<LiveRecap["data"] | null>(null);
+  const [daily, setDaily] = useState<DailyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,8 +108,15 @@ export function MonthlySummaryPage({
     try {
       // BE M13 (post-PR) sudah menampilkan semua karyawan aktif dengan angka 0
       // bila belum ada presensi/izin/cuti — FE tinggal mengambilnya.
-      const result = await getRecap(targetBulan, targetTahun);
+      const monthKey = `${targetTahun}-${String(targetBulan).padStart(2, "0")}`;
+      const [result, dailyResult] = await Promise.all([
+        getRecap(targetBulan, targetTahun),
+        // Riwayat presensi per tanggal (karyawan: baris sendiri; HR: semua —
+        // tapi detail per-tanggal hanya ditampilkan untuk scope "mine").
+        getAttendanceMonth(monthKey).catch(() => null),
+      ]);
       setRecap(result.data);
+      setDaily(dailyResult?.items ?? []);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Gagal memuat rekap.");
     } finally {
@@ -92,6 +143,25 @@ export function MonthlySummaryPage({
       })) ?? [];
 
   const ringkasan = recap?.ringkasan;
+
+  // Ringkasan sendiri dihitung dari baris harian agar konsisten dengan tabel
+  // per-tanggal di bawahnya (bukan dari ringkasan BE yang berisi semua tim).
+  const ringkasanSendiri = useMemo(() => {
+    const hitung = { hadir: 0, terlambat: 0, izin_sakit: 0, cuti: 0, alpa: 0 };
+    for (const row of daily) {
+      if (row.status === "hadir") hitung.hadir += 1;
+      else if (row.status === "terlambat") hitung.terlambat += 1;
+      else if (row.status === "izin" || row.status === "sakit") hitung.izin_sakit += 1;
+      else if (row.status === "cuti") hitung.cuti += 1;
+      else if (row.status === "alpa") hitung.alpa += 1;
+    }
+    return hitung;
+  }, [daily]);
+
+  const dailySorted = useMemo(
+    () => [...daily].sort((a, b) => a.date.localeCompare(b.date)),
+    [daily],
+  );
 
   const columns: Column<RecapViewRow>[] = [
     { key: "nama", header: "Karyawan", render: (row) => <span className="text-text">{row.nama}</span> },
@@ -144,6 +214,36 @@ export function MonthlySummaryPage({
       </Card>
 
       {error ? <Banner variant="danger" message={error} /> : null}
+
+      {scope === "mine" && !loading ? (
+        <>
+          {/* Ringkasan bulan terpilih (dihitung dari baris harian di bawah). */}
+          <Card className="p-5 sm:p-6">
+            <h2 className="text-h3 text-text">Ringkasan {formatMonthLabel(`${tahun}-${String(bulan).padStart(2, "0")}`)}</h2>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {Object.entries(ringkasanSendiri).map(([key, value]) => (
+                <div key={key} className="rounded-lg bg-surface-2 p-3">
+                  <p className="text-caption text-muted">{KATEGORI_LABEL[key] ?? key}</p>
+                  <p className="mt-1 text-h3 text-text tabular-nums">{value}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Detail per tanggal: hanya hari yang tercatat di BE. */}
+          <Table
+            caption={`Presensi harian ${formatMonthLabel(`${tahun}-${String(bulan).padStart(2, "0")}`)}`}
+            columns={DAILY_COLUMNS}
+            rows={dailySorted}
+            rowKey={(row) => String(row.id)}
+            empty={
+              <p className="text-body text-muted">
+                Belum ada presensi tercatat pada bulan ini.
+              </p>
+            }
+          />
+        </>
+      ) : null}
 
       <Table
         caption={`Rekap ${formatMonthLabel(`${tahun}-${String(bulan).padStart(2, "0")}`)}`}
