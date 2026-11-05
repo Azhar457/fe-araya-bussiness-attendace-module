@@ -18,16 +18,26 @@ export function WorkSettingsForm() {
   const [toleransi, setToleransi] = useState(15);
   const [saving, setSaving] = useState(false);
   const [jamPulangError, setJamPulangError] = useState<string | null>(null);
-  // Prefill dari BE live (GET /api/working-hours) bila sudah ada aturan;
-  // jika belum (404) pakai default 08:00/17:00/15.
+  const [aturanAktif, setAturanAktif] = useState<{ jam: string; toleransi: number } | null>(null);
+  const [aturanBelumAda, setAturanBelumAda] = useState(false);
+  // Muat aturan berlaku dari BE (GET /api/working-hours) untuk ditampilkan
+  // dan dipakai sebagai prefill form. 404 = belum pernah diatur.
   useEffect(() => {
     getWorkingHours()
       .then((rule) => {
         if (rule?.workStart) setJamMasuk(rule.workStart.slice(0, 5));
         if (rule?.workEnd) setJamPulang(rule.workEnd.slice(0, 5));
         if (typeof rule?.lateToleranceMinutes === "number") setToleransi(rule.lateToleranceMinutes);
+        if (rule?.workStart && rule?.workEnd) {
+          setAturanAktif({
+            jam: `${rule.workStart.slice(0, 5)} – ${rule.workEnd.slice(0, 5)}`,
+            toleransi: rule.lateToleranceMinutes ?? 0,
+          });
+        }
       })
-      .catch(() => undefined);
+      .catch((caught) => {
+        if (caught instanceof ApiError && caught.status === 404) setAturanBelumAda(true);
+      });
   }, []);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -67,10 +77,17 @@ export function WorkSettingsForm() {
         title="Pengaturan jam kerja"
       />
 
-      <Banner
-        variant="info"
-        message="Masukkan aturan baru lalu simpan. Aturan yang sedang berlaku belum dapat ditampilkan karena BE belum menyediakan endpoint baca."
-      />
+      {aturanAktif ? (
+        <Banner
+          variant="info"
+          message={`Aturan berlaku saat ini: jam kerja ${aturanAktif.jam} WIB, toleransi keterlambatan ${aturanAktif.toleransi} menit. Simpan untuk mengubahnya.`}
+        />
+      ) : aturanBelumAda ? (
+        <Banner
+          variant="info"
+          message="Belum ada aturan jam kerja yang diatur. Isi form di bawah lalu simpan untuk menetapkannya."
+        />
+      ) : null}
 
       <Card className="p-5 sm:p-6">
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
