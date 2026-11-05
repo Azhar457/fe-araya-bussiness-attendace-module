@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, type Column } from "@/components/ui/Table";
 import { ApiError } from "@/lib/api/client";
 import { getAttendanceMonth, getRecap } from "@/lib/api/kehadiran";
-import { currentMonth, formatDate, formatMonthLabel, formatTime } from "@/lib/format";
+import { currentMonth, formatDate, formatMonthLabel, formatTime, wibNow } from "@/lib/format";
 import type { LiveRecap, M13AttendanceMonth } from "@/lib/types";
 
 const BULAN_LABEL = [
@@ -42,7 +42,7 @@ const STATUS_HARIAN: Record<string, { label: string; tone: "success" | "pending"
   alpa: { label: "Alpa", tone: "danger" },
 };
 
-const DAILY_COLUMNS: Column<DailyRow>[] = [
+const DAILY_COLUMNS: Column<DailyViewRow>[] = [
   {
     key: "tanggal",
     header: "Tanggal",
@@ -52,26 +52,35 @@ const DAILY_COLUMNS: Column<DailyRow>[] = [
     key: "status",
     header: "Status",
     render: (row) => {
-      const status = row.status ? STATUS_HARIAN[row.status] : undefined;
-      if (!status) return <span className="text-body text-muted">—</span>;
-      const label =
-        row.status === "terlambat" && row.lateMinutes > 0
-          ? `${status.label} +${row.lateMinutes} mnt`
-          : status.label;
-      return <Badge tone={status.tone}>{label}</Badge>;
+      const data = row.row;
+      const status = data?.status ? STATUS_HARIAN[data.status] : undefined;
+      if (status && data) {
+        const label =
+          data.status === "terlambat" && data.lateMinutes > 0
+            ? `${status.label} +${data.lateMinutes} mnt`
+            : status.label;
+        return <Badge tone={status.tone}>{label}</Badge>;
+      }
+      // Hari tanpa data: akhir pekan (Sen–Jin hari kerja) atau belum ada presensi.
+      const hari = new Date(`${row.date}T00:00:00Z`).getUTCDay();
+      const libur = hari === 0 || hari === 6;
+      return <Badge tone="neutral">{libur ? "Akhir pekan" : "Tidak ada presensi"}</Badge>;
     },
   },
   {
     key: "masuk",
     header: "Jam Masuk",
-    render: (row) => <span className="text-body text-text tabular-nums">{row.checkInAt ? formatTime(row.checkInAt) : "—"}</span>,
+    render: (row) => <span className="text-body text-text tabular-nums">{row.row?.checkInAt ? formatTime(row.row.checkInAt) : "—"}</span>,
   },
   {
     key: "keluar",
     header: "Jam Keluar",
-    render: (row) => <span className="text-body text-text tabular-nums">{row.checkOutAt ? formatTime(row.checkOutAt) : "—"}</span>,
+    render: (row) => <span className="text-body text-text tabular-nums">{row.row?.checkOutAt ? formatTime(row.row.checkOutAt) : "—"}</span>,
   },
 ];
+
+/** Satu baris tampilan harian: data BE atau hari kosong (belum presensi/libur). */
+type DailyViewRow = { date: string; row?: DailyRow };
 
 function defaultBulanTahun(): { bulan: number; tahun: number } {
   const [tahun, bulan] = currentMonth().split("-").map(Number);
@@ -158,10 +167,21 @@ export function MonthlySummaryPage({
     return hitung;
   }, [daily]);
 
-  const dailySorted = useMemo(
-    () => [...daily].sort((a, b) => a.date.localeCompare(b.date)),
-    [daily],
-  );
+  // Grid tanggal 1 s.d. hari ini (bulan berjalan) atau 1 s.d. akhir bulan
+  // (bulan lampau). Hari tanpa data dari BE tetap tampil sebagai baris kosong.
+  const dailyGrid = useMemo<DailyViewRow[]>(() => {
+    const monthKey = `${tahun}-${String(bulan).padStart(2, "0")}`;
+    const hariIni = wibNow().dateKey;
+    const akhirBulan = new Date(Date.UTC(tahun, bulan, 0)).getUTCDate();
+    const sampai = monthKey === hariIni.slice(0, 7) ? Number(hariIni.slice(8, 10)) : akhirBulan;
+    const byDate = new Map(daily.map((row) => [row.date, row]));
+    const grid: DailyViewRow[] = [];
+    for (let d = 1; d <= sampai; d += 1) {
+      const date = `${monthKey}-${String(d).padStart(2, "0")}`;
+      grid.push({ date, row: byDate.get(date) });
+    }
+    return grid;
+  }, [daily, bulan, tahun]);
 
   const columns: Column<RecapViewRow>[] = [
     { key: "nama", header: "Karyawan", render: (row) => <span className="text-text">{row.nama}</span> },
@@ -230,12 +250,13 @@ export function MonthlySummaryPage({
             </div>
           </Card>
 
-          {/* Detail per tanggal: hanya hari yang tercatat di BE. */}
+          {/* Detail per tanggal: tanggal 1 s.d. hari ini; hari tanpa data
+              ditandai "Tidak ada presensi" / "Akhir pekan". */}
           <Table
             caption={`Presensi harian ${formatMonthLabel(`${tahun}-${String(bulan).padStart(2, "0")}`)}`}
             columns={DAILY_COLUMNS}
-            rows={dailySorted}
-            rowKey={(row) => String(row.id)}
+            rows={dailyGrid}
+            rowKey={(row) => row.date}
             empty={
               <p className="text-body text-muted">
                 Belum ada presensi tercatat pada bulan ini.
