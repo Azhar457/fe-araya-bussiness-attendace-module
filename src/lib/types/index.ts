@@ -213,6 +213,10 @@ export type LiveWorkingHours = {
   workStart: string; // "08:00:00"
   workEnd: string; // "17:00:00"
   lateToleranceMinutes: number;
+  /** Tanggal mulai berlaku (YYYY-MM-DD) — perubahan HR berlaku besok. */
+  berlakuMulai?: string;
+  /** Aturan terjadwal yang belum berlaku (bila HR sudah menyimpan perubahan). */
+  mendatang?: Omit<LiveWorkingHours, "mendatang"> | null;
   timezone?: string;
 };
 

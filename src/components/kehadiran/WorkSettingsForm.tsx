@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
@@ -19,10 +19,11 @@ export function WorkSettingsForm() {
   const [saving, setSaving] = useState(false);
   const [jamPulangError, setJamPulangError] = useState<string | null>(null);
   const [aturanAktif, setAturanAktif] = useState<{ jam: string; toleransi: number } | null>(null);
+  const [aturanMendatang, setAturanMendatang] = useState<{ jam: string; toleransi: number; mulai: string } | null>(null);
   const [aturanBelumAda, setAturanBelumAda] = useState(false);
   // Muat aturan berlaku dari BE (GET /api/working-hours) untuk ditampilkan
   // dan dipakai sebagai prefill form. 404 = belum pernah diatur.
-  useEffect(() => {
+  const muatAturan = useCallback(() => {
     getWorkingHours()
       .then((rule) => {
         if (rule?.workStart) setJamMasuk(rule.workStart.slice(0, 5));
@@ -34,11 +35,22 @@ export function WorkSettingsForm() {
             toleransi: rule.lateToleranceMinutes ?? 0,
           });
         }
+        if (rule?.mendatang?.workStart && rule.mendatang.workEnd) {
+          setAturanMendatang({
+            jam: `${rule.mendatang.workStart.slice(0, 5)} – ${rule.mendatang.workEnd.slice(0, 5)}`,
+            toleransi: rule.mendatang.lateToleranceMinutes ?? 0,
+            mulai: rule.mendatang.berlakuMulai ?? "",
+          });
+        }
       })
       .catch((caught) => {
         if (caught instanceof ApiError && caught.status === 404) setAturanBelumAda(true);
       });
   }, []);
+
+  useEffect(() => {
+    muatAturan();
+  }, [muatAturan]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -59,6 +71,8 @@ export function WorkSettingsForm() {
         toleransi_keterlambatan: toleransi,
       });
       push({ variant: "success", title: "Simpan berhasil", description: result.message });
+      // Muat ulang agar banner aturan berlaku / terjadwal ikut terbarui.
+      muatAturan();
     } catch (caught) {
       push({
         variant: "danger",
@@ -80,12 +94,19 @@ export function WorkSettingsForm() {
       {aturanAktif ? (
         <Banner
           variant="info"
-          message={`Aturan berlaku saat ini: jam kerja ${aturanAktif.jam} WIB, toleransi keterlambatan ${aturanAktif.toleransi} menit. Simpan untuk mengubahnya.`}
+          message={`Aturan berlaku saat ini: jam kerja ${aturanAktif.jam} WIB, toleransi keterlambatan ${aturanAktif.toleransi} menit. Perubahan yang disimpan berlaku mulai besok agar presensi hari ini tidak berubah.`}
         />
       ) : aturanBelumAda ? (
         <Banner
           variant="info"
           message="Belum ada aturan jam kerja yang diatur. Isi form di bawah lalu simpan untuk menetapkannya."
+        />
+      ) : null}
+
+      {aturanMendatang ? (
+        <Banner
+          variant="pending"
+          message={`Perubahan terjadwal${aturanMendatang.mulai ? ` mulai ${aturanMendatang.mulai}` : ""}: jam kerja ${aturanMendatang.jam} WIB, toleransi ${aturanMendatang.toleransi} menit. Simpan lagi untuk mengubah jadwal ini.`}
         />
       ) : null}
 
