@@ -2,14 +2,12 @@ import type { Role } from "@/lib/types";
 
 /** Konstanta auth yang aman dipakai di klien maupun server. */
 
-/** Cookie sesi: berisi token Bearer dari BE (diset halaman /login). */
-export const TOKEN_COOKIE = "araya_token";
-
 /**
- * Cookie token M13 (hasil POST /api/auth/exchange di BE M13).
- * Token M12 hanya untuk proxy M12; endpoint BE M13 wajib token M13.
+ * Cookie sesi: token Bearer **M13** (didapat POST /api/auth/login BE M13 —
+ * BE yang memverifikasi kredensial ke M12; FE tidak memegang token M12).
+ * Dipakai semua endpoint BE M13, juga proxy local (/api/m14/rekap).
  */
-export const M13_TOKEN_COOKIE = "araya_token_m13";
+export const TOKEN_COOKIE = "araya_token";
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin_hr: "Admin HR",

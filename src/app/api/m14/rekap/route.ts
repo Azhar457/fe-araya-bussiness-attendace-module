@@ -33,12 +33,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ sent: false, message: "Bulan (1-12) dan tahun wajib diisi." }, { status: 400 });
   }
 
-  // 1. Tarik rekap dari BE M13.
+  // 1. Tarik rekap dari BE M13 — perlu Bearer token M13 dari pemanggil.
   let recap: unknown;
   try {
+    const auth = request.headers.get("Authorization") ?? "";
+    if (!auth) {
+      return NextResponse.json({ sent: false, message: "Sesi tidak valid. Silakan masuk kembali." }, { status: 401 });
+    }
     const response = await fetch(
       `${M13_BASE}/api/attendance/recap?month=${tahun}-${String(bulan).padStart(2, "0")}`,
-      { cache: "no-store", headers: { Accept: "application/json" } },
+      { cache: "no-store", headers: { Accept: "application/json", Authorization: auth } },
     );
     if (!response.ok) {
       return NextResponse.json(

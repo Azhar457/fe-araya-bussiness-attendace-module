@@ -1,9 +1,13 @@
 /**
- * API layer — M13 (BE live) untuk presensi. Login & me via M12
- * (proxy FE `/api/m12/auth/*`), token M12 dikirim ke semua endpoint M13
- * (shared `neondb`).
+ * API layer — M13 (BE live). Autentikasi, presensi, izin, dan rekap 100% ke
+ * endpoint BE M13 langsung (`NEXT_PUBLIC_API_BASE_URL` = laboratorium-backend);
+ * FE tidak memanggil M12 sendiri — BE M13 yang memverifikasi ke M12 saat login.
  *
- * Endpoint M13 (ke NEXT_PUBLIC_API_BASE_URL = laboratorium-backend):
+ * Endpoint M13 yang dipanggil:
+ *   Auth:
+ *   - POST /api/auth/login           (login: email M12 atau nik lokal → token M13)
+ *   - POST /api/auth/logout          (blacklist jti token di BE)
+ *   - GET  /api/auth/me              (identitas pemilik token M13)
  *   Presensi:
  *   - POST /api/working-hours       (HR)
  *   - GET  /api/working-hours
@@ -23,12 +27,10 @@ import type {
   LiveLeaveList,
   LiveLeaveQuota,
   LiveLeaveResult,
-  LiveLoginResult,
   LiveRecap,
   LiveToday,
   LiveWorkingHours,
   LiveWorkingHoursResult,
-  M12EmployeeList,
   M13AttendanceMonth,
   M13DailyRecap,
   M14PushResult,
@@ -36,56 +38,58 @@ import type {
 } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
-/* Autentikasi — M12 (proxy FE /api/m12/auth/* → M12 POST /api/login) */
+/* Autentikasi — M13 langsung (POST /api/auth/login & logout)          */
 /* ------------------------------------------------------------------ */
 
+/** Respons POST /api/auth/login M13 — role sudah bentuk FE ("admin_hr" | "karyawan"). */
+export type M13LoginResult = {
+  token: string;
+  tokenType?: string;
+  expiresIn?: number;
+  user: {
+    karyawanId: number;
+    nik: string;
+    nama: string;
+    role: Role;
+    jabatan?: string | null;
+    divisi?: string | null;
+  };
+};
+
 /**
- * POST /api/m12/auth/login (proxy FE → M12 POST /api/login).
- * email + password → token M12 + identitas (role string M12).
+ * POST /api/auth/login (BE M13 langsung, bukan lewat M12).
+ * email (akun M12; password diverifikasi BE ke M12) ATAU nik (akun lokal M13)
+ * → token Bearer M13 + identitas/role. Anggap satu-satunya pintu masuk FE.
  */
-export function m12Login(email: string, password: string): Promise<LiveLoginResult> {
-  return request<LiveLoginResult>("/api/m12/auth/login", {
+export function m13Login(email: string, password: string): Promise<M13LoginResult> {
+  return request<M13LoginResult>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
-  }, { local: true });
+  });
 }
 
 /**
- * POST /api/m12/auth/logout (proxy FE → M12 POST /api/logout, Bearer token).
+ * POST /api/auth/logout (BE M13) — jti token masuk blacklist di BE sampai
+ * kadaluarsa. Pelengkap: FE tetap menghapus cookie walau panggilan gagal.
  */
-export function m12Logout(): Promise<{ message: string }> {
-  return request<{ message: string }>("/api/m12/auth/logout", {
+export function m13Logout(): Promise<{ message?: string }> {
+  return request<{ message?: string }>("/api/auth/logout", {
     method: "POST",
     body: "{}",
-  }, { local: true });
+  });
 }
 
-/**
- * GET /api/m12/auth/me (proxy FE → M12 GET /api/me, Bearer token).
- * Balas M12: { employee_id, name, nik, role, ... } — role string
- * M12 ("Admin HR" | "Employee") dinormalisasi via `normalizeRole`.
- */
-export type M12MeResponse = {
-  success: boolean;
-  employee_id: number;
-  name: string;
+/** GET /api/auth/me (BE M13 langsung) — identitas pemilik token M13. */
+export type M13MeResponse = {
+  karyawanId: number;
   nik: string | null;
-  /** "Admin HR" | "Employee" — label tampilan dari M12. */
-  role: string;
+  nama: string;
+  role: Role;
+  jabatan?: string | null;
+  divisi?: string | null;
 };
-export function getM12Me(): Promise<M12MeResponse> {
-  return request<M12MeResponse>("/api/m12/auth/me", undefined, { local: true });
-}
-
-/**
- * Normalisasi role string M12 ("Admin HR" | "Employee") → Role FE
- * ("admin_hr" | "karyawan").
- */
-export function normalizeRole(role: string): Role {
-  const r = role.trim().toLowerCase();
-  return r === "admin hr" || r === "admin_hr" || r === "admin" || r === "hr"
-    ? "admin_hr"
-    : "karyawan";
+export function getM13Me(): Promise<M13MeResponse> {
+  return request<M13MeResponse>("/api/auth/me");
 }
 
 /* ------------------------------------------------------------------ */
@@ -218,10 +222,6 @@ export function getDailyRecap(month: string): Promise<M13DailyRecap> {
 /* ------------------------------------------------------------------ */
 
 /** PULL M12: daftar karyawan aktif (HANYA HR; dipakai rekap Admin HR). */
-export function getKaryawanAktif(): Promise<M12EmployeeList> {
-  return request<M12EmployeeList>("/api/m12/karyawan-aktif", undefined, { local: true });
-}
-
 /** PUSH M14: kirim rekap bulan terpilih ke endpoint M14. */
 export function pushRekapKeM14(bulan: number, tahun: number): Promise<M14PushResult> {
   return request<M14PushResult>(

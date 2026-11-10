@@ -7,19 +7,15 @@ import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField, Input } from "@/components/ui/FormField";
-import { ApiError, apiUrl } from "@/lib/api/client";
-import { m12Login, normalizeRole } from "@/lib/api/kehadiran";
-import { M13_TOKEN_COOKIE, TOKEN_COOKIE, homeFor } from "@/lib/auth/constants";
+import { ApiError } from "@/lib/api/client";
+import { m13Login } from "@/lib/api/kehadiran";
+import { TOKEN_COOKIE, homeFor } from "@/lib/auth/constants";
 
 /**
- * Halaman masuk M13 — login ke M12 (Kel. C3) via proxy FE
- * `POST /api/m12/auth/login`, lalu token M12 disimpan di cookie
- * `araya_token` dan dikirim ke semua endpoint BE M13.
- *
- *  - Endpoint: POST /api/m12/auth/login (proxy → M12 /api/login)
- *  - Field: email + password
- *  - Respons: { success, token, role, employee_id, name, nik, ... }
- *  - Role M12 ("Admin HR" | "Employee") dinormalisasi ke Role FE.
+ * Halaman masuk M13 — login langsung ke BE M13 `POST /api/auth/login`
+ * (email akun M12 ATAU nik akun lokal; BE M13 yang memverifikasi ke M12).
+ * Token Bearer M13 disimpan di cookie `araya_token` dan dikirim ke semua
+ * endpoint BE M13 (TTL 12 jam).
  */
 function setCookie(name: string, value: string, maxAge = 43200) {
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; samesite=lax`;
@@ -43,28 +39,13 @@ export function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const result = await m12Login(email.trim(), password);
+      // Login langsung ke BE M13: POST /api/auth/login (email akun M12 atau
+      // nik lokal). BE yang memverifikasi password ke M12 — FE tidak pernah
+      // memanggil M12. Token Bearer M13 (12 jam) dipakai di semua endpoint.
+      const result = await m13Login(email.trim(), password);
       setCookie(TOKEN_COOKIE, result.token);
 
-      // Tukar token M12 → token M13 (BE M13 verifikasi ke M12; password tetap
-      // milik M12). Gagal tidak memblokir masuk — client.ts akan mencoba lagi
-      // otomatis saat ada request M13 yang 401.
-      try {
-        const res = await fetch(apiUrl("/api/auth/exchange"), {
-          method: "POST",
-          headers: { Authorization: `Bearer ${result.token}`, "Content-Type": "application/json" },
-          body: "{}",
-          cache: "no-store",
-        });
-        if (res.ok) {
-          const data = (await res.json()) as { token?: string };
-          if (data.token) setCookie(M13_TOKEN_COOKIE, data.token);
-        }
-      } catch {
-        // diamkan: self-heal di client.ts yang menangani.
-      }
-
-      const role = normalizeRole(result.role);
+      const role = result.user.role;
       router.replace(homeFor(role));
       router.refresh();
     } catch (caught) {
