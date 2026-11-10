@@ -8,11 +8,11 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/client";
-import { checkIn, checkOut, getRecap, getToday } from "@/lib/api/kehadiran";
+import { checkIn, checkOut, getRecap, getToday, getWorkingHours } from "@/lib/api/kehadiran";
 import { onAttendanceChanged, notifyAttendanceChanged } from "@/lib/attendance-events";
 import { currentMonth, formatDate, formatDateLong, wibNow } from "@/lib/format";
 import { useWibClock, wibGreeting } from "@/lib/useWibClock";
-import type { LiveRecap, LiveToday } from "@/lib/types";
+import type { LiveRecap, LiveToday, LiveWorkingHours } from "@/lib/types";
 
 /**
  * Dashboard kehadiran karyawan (M13-US2) — layout mengikuti referensi UI/UX stitch.
@@ -24,6 +24,7 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recap, setRecap] = useState<LiveRecap | null>(null);
+  const [workingHours, setWorkingHours] = useState<LiveWorkingHours | null>(null);
   const [punching, setPunching] = useState(false);
 
   const clock = useWibClock();
@@ -44,6 +45,11 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Muat jam kerja (untuk check-out only-at-jam-pulang).
+  useEffect(() => {
+    getWorkingHours().then(setWorkingHours).catch(() => setWorkingHours(null));
+  }, []);
 
   // Muat ulang kartu saat CTA presensi mengubah status hari ini.
   useEffect(() => onAttendanceChanged(() => void load()), [load]);
@@ -126,6 +132,13 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
 
   const greeting = wibGreeting(Math.floor(wibNow().minutes / 60));
 
+  const isAfterWorkEnd = useMemo(() => {
+    if (!workingHours) return false;
+    const nowMin = wibNow().minutes;
+    const [wh, wm] = workingHours.workEnd.split(":").map(Number);
+    return nowMin >= wh * 60 + (wm ?? 0);
+  }, [workingHours]);
+
   // Status pill banner.
   let pillText = "Belum presensi";
   let pillTone: "pending" | "success" = "pending";
@@ -146,8 +159,9 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
     buttonVariant = "neutral";
     buttonDisabled = true;
   } else if (isCheckedIn) {
-    buttonLabel = "Presensi Keluar";
-    buttonVariant = "danger";
+    buttonLabel = isAfterWorkEnd ? "Jam Pulang Lelewati" : "Presensi Keluar";
+    buttonVariant = isAfterWorkEnd ? "neutral" : "danger";
+    buttonDisabled = isAfterWorkEnd;
   }
   if (!today.isWorkday) {
     buttonLabel = "Hari Ini Bukan Hari Kerja";

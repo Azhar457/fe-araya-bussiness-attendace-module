@@ -13,12 +13,13 @@ export type NavItem = {
  * Isi sidebar mengikuti Studi Kasus Capstone (M13, 5 user story):
  * US1 pengaturan jam kerja, US2 check-in/out, US3 izin & sakit, US5 rekap.
  *
- * Fitur di luar SSOT (persetujuan izin HR, riwayat harian, hari libur,
- * GPS, koreksi presensi) sengaja tidak ditampilkan.
+ * M13-US6 — rekapitulasi perizinan (peninjauan HR atas pengajuan izin/sakit)
+ * juga ditampilkan.
  */
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin_hr: [
     { href: "/kehadiran/pengaturan", label: "Pengaturan jam kerja", icon: Settings2 },
+    { href: "/kehadiran/izin/rekapitulasi", label: "Rekapitulasi Perizinan", icon: FileText },
     { href: "/kehadiran/rekap", label: "Rekap kehadiran", icon: CalendarDays },
     { href: "/kehadiran/rekap/daily", label: "Rekap harian", icon: History },
   ],

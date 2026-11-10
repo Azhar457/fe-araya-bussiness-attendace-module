@@ -258,6 +258,19 @@ export type LiveLeaveList = {
   }>;
 };
 
+/**
+ * M13-US6 — HR meninjau & memutuskan pengajuan izin/sakit.
+ * Endpoint masih menunggu dibuat di BE (`GET ?scope=all` + `PUT {id}`),
+ * tipe ini disiapkan agar FE bisa digabung begitu endpoint ready.
+ */
+export type M13ApprovalResult = {
+  success: boolean;
+  message?: string;
+  pengajuan_id: number;
+  status: "disetujui" | "ditolak";
+  reviewer_note?: string | null;
+};
+
 /** GET /api/leave-quotas?year=… — kuota cuti tahunan (dari kontrak cuti M12). */
 export type LiveLeaveQuota = {
   success: boolean;

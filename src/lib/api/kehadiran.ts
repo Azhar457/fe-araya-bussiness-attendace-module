@@ -34,6 +34,7 @@ import type {
   M13AttendanceMonth,
   M13DailyRecap,
   M14PushResult,
+  M13ApprovalResult,
   Role,
 } from "@/lib/types";
 
@@ -107,6 +108,23 @@ export function getWorkingHours(): Promise<LiveWorkingHours> {
   return request<LiveWorkingHours>("/api/working-hours");
 }
 /** POST /api/working-hours (HR) — upsert aturan global (id=1). */
+/* M13-US6 — daftar semua pengajuan izin/sakit untuk ditinjau HR. */
+export function listLeavesForHR(): Promise<LiveLeaveList> {
+  return request<LiveLeaveList>("/api/leave-permissions?scope=all");
+}
+
+/* M13-US6 — setujui / tolak satu pengajuan (berlaku ke semua baris rentang). */
+export function approveLeave(
+  pengajuanId: number,
+  status: "disetujui" | "ditolak",
+  reviewerNote?: string,
+): Promise<M13ApprovalResult> {
+  return request<M13ApprovalResult>(`/api/leave-permissions/${pengajuanId}`, {
+    method: "PUT",
+    body: JSON.stringify({ status, reviewer_note: reviewerNote ?? "" }),
+  });
+}
+
 export function saveWorkingHours(input: WorkingHoursInput): Promise<LiveWorkingHoursResult> {
   return request<LiveWorkingHoursResult>("/api/working-hours", {
     method: "POST",
