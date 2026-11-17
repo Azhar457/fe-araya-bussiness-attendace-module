@@ -255,6 +255,9 @@ export type LiveLeaveList = {
     reviewer_note?: string | null;
     attachment?: LiveLeaveAttachment | null;
     karyawan_id?: number;
+    /** Hanya ada saat `?scope=all` (Admin HR). */
+    nama?: string | null;
+    nik?: string | null;
   }>;
 };
 

@@ -98,9 +98,7 @@ export function RekapPerizinan() {
       .map(([key, group]) => {
         const sorted = [...group].sort((a, b) => a.tanggal.localeCompare(b.tanggal));
         const withAttachment = sorted.find((r) => r.attachment);
-        const withKaryawan = sorted.find(
-          (r) => (r as unknown as { namaKaryawan?: string }).namaKaryawan,
-        ) as unknown as { namaKaryawan?: string; nik?: string } | undefined;
+        const withKaryawan = sorted.find((r) => r.nama || r.nik);
         return {
           key,
           pengajuan_id: sorted[0].pengajuan_id ?? null,
@@ -112,8 +110,8 @@ export function RekapPerizinan() {
           status: sorted[0].status,
           reviewerNote: sorted[0].reviewer_note,
           attachment: withAttachment?.attachment ?? null,
-          namaKaryawan: withKaryawan?.namaKaryawan,
-          nik: withKaryawan?.nik,
+          namaKaryawan: withKaryawan?.nama ?? undefined,
+          nik: withKaryawan?.nik ?? undefined,
         };
       })
       .sort((a, b) => b.mulai.localeCompare(a.mulai));
