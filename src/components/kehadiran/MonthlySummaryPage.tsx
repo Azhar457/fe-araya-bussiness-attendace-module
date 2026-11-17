@@ -14,7 +14,7 @@ import type { LiveRecap, M13AttendanceMonth, M13DailyRecap } from "@/lib/types";
 
 type DailyRow = M13AttendanceMonth["items"][number];
 type TeamRow = M13DailyRecap["data"]["items"][number];
-type DailyViewRow = { date: string; row?: DailyRow };
+type DailyViewRow = { date: string; row?: DailyRow; alpa?: boolean };
 
 const KATEGORI_LABEL: Record<string, string> = {
   hadir: "Hadir",
@@ -52,9 +52,11 @@ const DAILY_COLUMNS: Column<DailyViewRow>[] = [
             : status.label;
         return <Badge tone={status.tone}>{label}</Badge>;
       }
-      // Hari tanpa data: akhir pekan (Sen–Jin hari kerja) atau belum ada presensi.
+      // Hari tanpa data: alpa bila hari kerja yang sudah lewat, akhir pekan, atau
+      // belum ada presensi (hari ini/tanggal mendatang).
       const hari = new Date(`${row.date}T00:00:00Z`).getUTCDay();
       const libur = hari === 0 || hari === 6;
+      if (!libur && row.alpa) return <Badge tone="danger">Alpa</Badge>;
       return <Badge tone="neutral">{libur ? "Akhir pekan" : "Tidak ada presensi"}</Badge>;
     },
   },
@@ -164,19 +166,6 @@ export function MonthlySummaryPage({
 
   const ringkasan = recap?.ringkasan;
 
-  // Ringkasan karyawan dihitung dari baris harian agar konsisten dengan tabel.
-  const ringkasanSendiri = useMemo(() => {
-    const hitung = { hadir: 0, terlambat: 0, izin_sakit: 0, cuti: 0, alpa: 0 };
-    for (const row of daily) {
-      if (row.status === "hadir") hitung.hadir += 1;
-      else if (row.status === "terlambat") hitung.terlambat += 1;
-      else if (row.status === "izin" || row.status === "sakit") hitung.izin_sakit += 1;
-      else if (row.status === "cuti") hitung.cuti += 1;
-      else if (row.status === "alpa") hitung.alpa += 1;
-    }
-    return hitung;
-  }, [daily]);
-
   // Grid tanggal 1 s.d. hari ini; hari tanpa data tetap tampil sebagai baris kosong.
   const dailyGrid = useMemo<DailyViewRow[]>(() => {
     const [tahun, bulan] = monthKey.split("-").map(Number);
@@ -186,7 +175,10 @@ export function MonthlySummaryPage({
     const grid: DailyViewRow[] = [];
     for (let d = 1; d <= sampai; d += 1) {
       const date = `${monthKey}-${String(d).padStart(2, "0")}`;
-      grid.push({ date, row: byDate.get(date) });
+      const hari = new Date(`${date}T00:00:00Z`).getUTCDay();
+      const akhirPekan = hari === 0 || hari === 6;
+      // Sama dengan aturan BE: hari kerja yang sudah lewat tanpa data = alpa.
+      grid.push({ date, row: byDate.get(date), alpa: !akhirPekan && date < hariIni });
     }
     return grid;
   }, [daily, monthKey, hariIni]);
@@ -210,7 +202,7 @@ export function MonthlySummaryPage({
         <h2 className="text-h3 text-text">Ringkasan total</h2>
         <p className="mt-1 text-caption text-muted">{formatMonthLabel(monthKey)}</p>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {Object.entries(scope === "mine" ? ringkasanSendiri : (ringkasan ?? {})).map(
+          {Object.entries(ringkasan ?? {}).map(
             ([key, value]) => (
               <div key={key} className="rounded-lg bg-surface-2 p-3">
                 <p className="text-caption text-muted">{KATEGORI_LABEL[key] ?? key}</p>
