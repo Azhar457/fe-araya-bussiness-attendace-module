@@ -132,12 +132,12 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
 
   const greeting = wibGreeting(Math.floor(wibNow().minutes / 60));
 
-  const isAfterWorkEnd = useMemo(() => {
+  const isAfterWorkEnd = (() => {
     if (!workingHours) return false;
     const nowMin = wibNow().minutes;
     const [wh, wm] = workingHours.workEnd.split(":").map(Number);
     return nowMin >= wh * 60 + (wm ?? 0);
-  }, [workingHours]);
+  })();
 
   // Status pill banner.
   let pillText = "Belum presensi";
