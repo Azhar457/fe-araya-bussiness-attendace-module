@@ -76,8 +76,8 @@ export function DailyRecapPage() {
     const map = new Map<string, DailyRow[]>();
     for (const row of items) {
       // BE mengirim grid penuh bulan (termasuk tanggal mendatang & akhir pekan).
-      // Tanggal mendatang selalu "alpa" dan akhir pekan memang libur — jangan
-      // ditampilkan sebagai pelanggaran.
+      // Keduanya bukan pelanggaran: tanggal mendatang belum bisa dinilai alpa,
+      // akhir pekan memang libur — sembunyikan dari rincian.
       if (row.tanggal > hariIni) continue;
       const hari = new Date(`${row.tanggal}T00:00:00Z`).getUTCDay();
       if (hari === 0 || hari === 6) continue;
