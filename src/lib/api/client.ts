@@ -90,8 +90,8 @@ export async function request<T>(
     throw new ApiError(0, "NETWORK_ERROR", "Koneksi terputus. Coba lagi.");
   }
 
-  // Token M13 kedaluwarsa / dicabut → 401 diteruskan ke pemanggil (UI
-  // menampilkan pesan; guard server-side akan redirect ke /login berikutnya).
+  // Token M13 kedaluwarsa / dicabut → 401: cookie dibersihkan dan pengguna
+  // dikembalikan ke /login (kecuali 401 dari endpoint login itu sendiri).
 
   if (response.status === 204) return undefined as T;
 
@@ -101,6 +101,17 @@ export async function request<T>(
     | null;
 
   if (!response.ok) {
+    // Sesi kedaluwarsa/dicabut → bersihkan cookie dan kembali ke login.
+    // Login sendiri dikecualikan: 401 di sana berarti kredensial salah.
+    if (
+      response.status === 401 &&
+      path !== "/api/auth/login" &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/login")
+    ) {
+      document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0`;
+      window.location.replace("/login");
+    }
     // BE live bentuk error: { error: "pesan" } atau { error: { code, message } }
     let errorMessage: string;
     let errorFields: Record<string, string> | undefined;

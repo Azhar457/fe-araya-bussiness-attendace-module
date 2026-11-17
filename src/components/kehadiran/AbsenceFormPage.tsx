@@ -485,16 +485,21 @@ export function AbsenceFormPage() {
   );
 }
 
+/** BE menyimpan status sebagai pending/disetujui/ditolak. */
 function statusLabel(status: string): string {
-  const map: Record<string, string> = { pending: "Menunggu", approved: "Disetujui", rejected: "Ditolak" };
+  const map: Record<string, string> = {
+    pending: "Menunggu",
+    disetujui: "Disetujui",
+    ditolak: "Ditolak",
+  };
   return map[status] ?? status;
 }
 
 function statusTone(status: string): "success" | "pending" | "danger" | "info" | "neutral" {
   const map: Record<string, "success" | "pending" | "danger" | "info" | "neutral"> = {
     pending: "pending",
-    approved: "success",
-    rejected: "danger",
+    disetujui: "success",
+    ditolak: "danger",
   };
   return map[status] ?? "neutral";
 }

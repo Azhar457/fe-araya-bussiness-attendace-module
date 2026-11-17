@@ -47,7 +47,7 @@ const JENIS_LABEL: Record<string, string> = {
  * M13-US6 — rekapitulasi perizinan di halaman izin, khusus Admin HR.
  *
  * - List semua pengajuan izin/sakit yang diproses HR (pending → "Menunggu",
- *   approved → "Disetujui", rejected → "Ditolak").
+ *   disetujui → "Disetujui", ditolak → "Ditolak").
  * - Per pengajuan ada kolom lampiran & keputusan (setujui / tolak).
  * - Endpoint `?scope=all` dan `PUT {id}` menunggu dibuat di BE; bila
  *   belum tersedia, UI menampilkan pesan "belum tersedia".
@@ -140,16 +140,25 @@ export function RekapPerizinan() {
 
   async function putuskan(p: RekapPerizinan, action: "setuju" | "tolak") {
     if (p.pengajuan_id == null) return;
+
+    // Alasan penolakan wajib (lihat teks aturan di halaman).
+    let note = "Disetujui";
+    if (action === "tolak") {
+      const input = globalThis.prompt("Alasan penolakan (wajib, maks 200 huruf):");
+      if (input === null) return; // dibatalkan → jangan kirim keputusan
+      note = input.trim().slice(0, 200);
+      if (!note) {
+        toast({ variant: "danger", title: "Alasan penolakan wajib diisi." });
+        return;
+      }
+    }
+
     setActing({ key: p.key, action });
     try {
-      const note =
-        action === "tolak"
-          ? globalThis.prompt("Alasan penolakan (opsional, maks 200 huruf):")?.trim().slice(0, 200) ?? ""
-          : "Disetujui";
       const result = await approveLeave(
         p.pengajuan_id,
         action === "setuju" ? "disetujui" : "ditolak",
-        note || undefined,
+        note,
       );
       if (result?.success === false) {
         toast({ variant: "danger", title: result.message ?? "Gagal menyimpan keputusan." });
@@ -281,9 +290,9 @@ export function RekapPerizinan() {
       ) : beUnavailable ? (
         <Card className="flex flex-col gap-3 p-5">
           <p className="text-body text-pending-fg">
-            Modul persetujuan izin/sakit menunggu endpoint backend (<code>GET /api/leave-permissions?scope=all</code>{" "}
-            &amp; <code>PUT /api/leave-permissions/{'{id}'}</code>). Halaman ini akan otomatis berfungsi setelah
-            endpoint tersedia.
+            Backend yang sedang ter-deploy belum menyediakan endpoint persetujuan (<code>GET /api/leave-permissions?scope=all</code>{" "}
+            &amp; <code>PUT /api/leave-permissions/&#123;pengajuan_id&#125;</code>). Halaman ini otomatis berfungsi setelah
+            deploy selesai — tekan Coba lagi.
           </p>
           <Button type="button" variant="tertiary" onClick={() => void load()}>
             Coba lagi
@@ -304,8 +313,8 @@ export function RekapPerizinan() {
           <div className="flex flex-col gap-1">
             <p className="text-h3 text-text">Tidak ada pengajuan menunggu</p>
             <p className="text-body text-muted">
-              Semua pengajuan sudah diproses. Gunakan <a className="text-primary hover:underline" href="/kehadiran/izin/riwayat">Riwayat</a>{" "}
-              untuk melihat keputusan yang sudah dibuat.
+              Semua pengajuan sudah diproses. Keputusan yang sudah dibuat tercatat pada riwayat
+              pengajuan masing-masing karyawan.
             </p>
           </div>
         </Card>

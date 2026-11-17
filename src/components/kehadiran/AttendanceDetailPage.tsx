@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Table, type Column } from "@/components/ui/Table";
 import { ApiError } from "@/lib/api/client";
 import { getAttendanceMonth } from "@/lib/api/kehadiran";
-import { currentMonth, formatDate, formatDateLong, formatMonthLabel, formatTime, lastMonths } from "@/lib/format";
+import { currentMonth, formatDate, formatDateLong, formatMonthLabel, formatTime, lastMonths, wibNow } from "@/lib/format";
 import type { M13AttendanceItem } from "@/lib/types";
 
 const BULAN_LIST = lastMonths();
@@ -233,10 +233,7 @@ export function AttendanceDetailPage({ employeeName }: { employeeName: string })
   );
 }
 
+/** Bandingkan dengan tanggal WIB, bukan zona waktu browser. */
 function isTodayDate(dateKey: string): boolean {
-  const now = new Date();
-  const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate(),
-  ).padStart(2, "0")}`;
-  return dateKey === key;
+  return dateKey === wibNow().dateKey;
 }
