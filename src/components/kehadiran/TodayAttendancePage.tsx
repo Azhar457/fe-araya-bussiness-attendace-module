@@ -149,7 +149,8 @@ export function TodayAttendancePage({ employeeName, employeeId }: { employeeName
   let pillText = "Belum presensi";
   let pillTone: "pending" | "success" = "pending";
   if (isCheckedOut) {
-    pillText = `Sudah keluar ${attendance!.checkOutAt?.slice(11, 16) ?? ""}`.replace("  ", " ");
+    // Jam keluar sudah tampil di tabel detail; pill cukup menyatakan status akhir.
+    pillText = "Selesai";
     pillTone = "success";
   } else if (isCheckedIn) {
     pillText = `Sudah masuk ${attendance!.checkInAt?.slice(11, 16) ?? ""}`.replace("  ", " ");
