@@ -191,6 +191,12 @@ export function submitLeave(input: LeaveInput): Promise<LiveLeaveResult> {
   });
 }
 
+/** DELETE /api/leave-permissions/{id} — batalkan satu baris pengajuan (milik sendiri). */
+export function deleteLeave(id: number): Promise<{ message: string }> {
+  invalidateRecapCache();
+  return request(`/api/leave-permissions/${id}`, { method: "DELETE" });
+}
+
 /** POST /api/leave-permissions/{id}/attachment — unggah lampiran (multipart, maks 5MB, gambar/PDF). */
 export function uploadLeaveAttachment(leaveId: number, file: File): Promise<{ message: string }> {
   const form = new FormData();
