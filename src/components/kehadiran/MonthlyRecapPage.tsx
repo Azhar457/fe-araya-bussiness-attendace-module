@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Table, type Column } from "@/components/ui/Table";
 import { ApiError } from "@/lib/api/client";
 import { getDailyRecap } from "@/lib/api/kehadiran";
-import { currentMonth, formatDate, formatMonthLabel, formatTime, lastMonths, wibNow } from "@/lib/format";
+import { currentMonth, formatDate, formatMonthLabel, lastMonths, wibNow } from "@/lib/format";
 import type { M13DailyRecap } from "@/lib/types";
 
 const BULAN_LIST = lastMonths();
@@ -32,7 +32,8 @@ type DailyRow = M13DailyRecap["data"]["items"][number];
  * (karyawan × tanggal) berisi status, jam masuk/pulang, keterlambatan.
  * Bila endpoint belum di-deploy (404), tampilkan pesan informatif.
  */
-export function DailyRecapPage() {
+export function MonthlyRecapPage() {
+  const hariIni = wibNow().dateKey;
   const [month, setMonth] = useState(currentMonth());
   const [items, setItems] = useState<DailyRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -46,7 +47,7 @@ export function DailyRecapPage() {
     getDailyRecap(m)
       .then((result) => {
         setItems(
-          [...(result.data?.items ?? [])].sort(
+          (result.data?.items ?? []).toSorted(
             (a, b) => b.tanggal.localeCompare(a.tanggal) || a.nama.localeCompare(b.nama),
           ),
         );
@@ -71,106 +72,118 @@ export function DailyRecapPage() {
     load(month);
   }, [month, load]);
 
-  const groups = useMemo(() => {
-    const hariIni = wibNow().dateKey;
-    const map = new Map<string, DailyRow[]>();
+  const { groups, mapDays } = useMemo(() => {
+    // Satu lintasan untuk keduanya: saring tanggal mendatang & akhir pekan,
+    // kelompokkan per tanggal, sekaligus hitung isi sel peta.
+    const perTanggal = new Map<string, DailyRow[]>();
     for (const row of items) {
-      // BE mengirim grid penuh bulan (termasuk tanggal mendatang & akhir pekan).
-      // Keduanya bukan pelanggaran: tanggal mendatang belum bisa dinilai alpa,
-      // akhir pekan memang libur — sembunyikan dari rincian.
       if (row.tanggal > hariIni) continue;
       const hari = new Date(`${row.tanggal}T00:00:00Z`).getUTCDay();
       if (hari === 0 || hari === 6) continue;
-      const arr = map.get(row.tanggal) ?? [];
+      const arr = perTanggal.get(row.tanggal) ?? [];
       arr.push(row);
-      map.set(row.tanggal, arr);
+      perTanggal.set(row.tanggal, arr);
     }
-    return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
-  }, [items]);
 
-  const columns: Column<DailyRow>[] = [
-    {
-      key: "nama",
-      header: "Karyawan",
-      render: (row) => (
-        <div className="flex flex-col leading-tight">
-          <span className="text-body text-text">{row.nama}</span>
-          {row.nik ? <span className="text-caption text-muted">{row.nik}</span> : null}
-        </div>
-      ),
-    },
-    {
-      key: "checkInAt",
-      header: "Jam Masuk",
-      align: "right",
-      render: (row) => <span className="text-body text-text tabular-nums">{timeOfDay(row.checkInAt)}</span>,
-    },
-    {
-      key: "checkOutAt",
-      header: "Jam Pulang",
-      align: "right",
-      render: (row) => <span className="text-body text-text tabular-nums">{timeOfDay(row.checkOutAt)}</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) =>
-        row.status ? <StatusBadge status={row.status} /> : <span className="text-body text-muted">—</span>,
-    },
-    {
-      key: "late",
-      header: "Terlambat",
-      align: "right",
-      render: (row) =>
-        row.lateMinutes > 0 ? (
-          <Badge tone="pending">{`${row.lateMinutes} mnt`}</Badge>
-        ) : (
-          <span className="text-body text-muted">—</span>
+    const peta: Record<string, MapDay> = {};
+    for (const [date, rows] of perTanggal) {
+      let hadir = 0;
+      let terlambat = 0;
+      let lain = 0;
+      let alpa = 0;
+      for (const row of rows) {
+        if (row.status === "hadir") hadir += 1;
+        else if (row.status === "terlambat") terlambat += 1;
+        else if (row.status === "alpa") alpa += 1;
+        else if (row.status) lain += 1;
+      }
+      const masuk = hadir + terlambat;
+      const cuti = lain > 0 ? ` · ${lain} cuti` : "";
+      peta[date] =
+        masuk > 0
+          ? {
+              tone: terlambat > 0 ? "pending" : "success",
+              label: `${masuk} masuk${terlambat > 0 ? ` · ${terlambat} telat` : ""}${cuti}`,
+            }
+          : alpa > 0
+            ? { tone: "danger", label: `${alpa} alpa${cuti}` }
+            : date === hariIni
+              ? { tone: "neutral", label: "Belum presensi" }
+              : { tone: "neutral", label: "—" };
+    }
+
+    return {
+      groups: [...perTanggal.entries()].sort(([a], [b]) => b.localeCompare(a)),
+      mapDays: peta,
+    };
+  }, [items, hariIni]);
+
+  const columns = useMemo<Column<DailyRow>[]>(
+    () => [
+      {
+        key: "nama",
+        header: "Karyawan",
+        render: (row) => (
+          <div className="flex flex-col leading-tight">
+            <span className="text-body text-text">{row.nama}</span>
+            {row.nik ? <span className="text-caption text-muted">{row.nik}</span> : null}
+          </div>
         ),
-    },
-  ];
+      },
+      {
+        key: "checkInAt",
+        header: "Jam Masuk",
+        align: "right",
+        render: (row) => (
+          <span className="text-body text-text tabular-nums">{timeOfDay(row.checkInAt)}</span>
+        ),
+      },
+      {
+        key: "checkOutAt",
+        header: "Jam Pulang",
+        align: "right",
+        render: (row) => (
+          <span className="text-body text-text tabular-nums">{timeOfDay(row.checkOutAt)}</span>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        render: (row) => {
+          if (row.status) return <StatusBadge status={row.status} />;
+          if (row.tanggal === hariIni) return <Badge tone="neutral">Belum presensi</Badge>;
+          return <span className="text-body text-muted">—</span>;
+        },
+      },
+      {
+        key: "late",
+        header: "Terlambat",
+        align: "right",
+        render: (row) =>
+          row.lateMinutes > 0 ? (
+            <Badge tone="pending">{`${row.lateMinutes} mnt`}</Badge>
+          ) : (
+            <span className="text-body text-muted">—</span>
+          ),
+      },
+    ],
+    [hariIni],
+  );
 
   const activeDate = selected ?? groups[0]?.[0] ?? null;
   const activeRows = activeDate ? (groups.find(([date]) => date === activeDate)?.[1] ?? []) : [];
 
-  // Isi sel peta: jumlah karyawan masuk/telat/cuti/alpa per tanggal.
-  const mapDays = useMemo<Record<string, MapDay>>(() => {
-    const perTanggal = new Map<string, { hadir: number; terlambat: number; lain: number; alpa: number }>();
-    for (const row of items) {
-      const hitung = perTanggal.get(row.tanggal) ?? { hadir: 0, terlambat: 0, lain: 0, alpa: 0 };
-      if (row.status === "hadir") hitung.hadir += 1;
-      else if (row.status === "terlambat") hitung.terlambat += 1;
-      else if (row.status === "alpa") hitung.alpa += 1;
-      else hitung.lain += 1;
-      perTanggal.set(row.tanggal, hitung);
-    }
-
-    const result: Record<string, MapDay> = {};
-    for (const [date, hitung] of perTanggal) {
-      const masuk = hitung.hadir + hitung.terlambat;
-      const cuti = hitung.lain > 0 ? ` · ${hitung.lain} cuti` : "";
-      result[date] = {
-        tone: masuk > 0 ? (hitung.terlambat > 0 ? "pending" : "success") : hitung.alpa > 0 ? "danger" : "info",
-        label:
-          masuk > 0
-            ? `${masuk} masuk${hitung.terlambat > 0 ? ` · ${hitung.terlambat} telat` : ""}${cuti}`
-            : hitung.alpa > 0
-              ? `${hitung.alpa} alpa${cuti}`
-              : `${hitung.lain} cuti`,
-      };
-    }
-    return result;
-  }, [items]);
+  // Isi sel peta sudah dihitung bersama `groups` di atas.
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         breadcrumb={[
           { label: "Kehadiran", href: "/kehadiran/pengaturan" },
-          { label: "Rekap kehadiran", href: "/kehadiran/rekap" },
-          { label: "Rekap harian" },
+          { label: "Rekap Harian", href: "/kehadiran/rekap" },
+          { label: "Rekap Bulanan" },
         ]}
-        title="Rekap Harian"
+        title="Rekap Bulanan"
       />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end">

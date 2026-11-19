@@ -21,6 +21,7 @@
  *   - GET  /api/attendance/recap?month=YYYY-MM    (HR: rekap tim)
  */
 import { request } from "@/lib/api/client";
+import { wibNow } from "@/lib/format";
 import type {
   LiveCheckInResult,
   LiveEmergencyContact,
@@ -119,6 +120,7 @@ export function approveLeave(
   status: "disetujui" | "ditolak",
   reviewerNote?: string,
 ): Promise<M13ApprovalResult> {
+  invalidateRecapCache();
   return request<M13ApprovalResult>(`/api/leave-permissions/${pengajuanId}`, {
     method: "PUT",
     body: JSON.stringify({ status, reviewer_note: reviewerNote ?? "" }),
@@ -143,6 +145,7 @@ export function getToday(): Promise<LiveToday> {
 
 /** POST /api/attendance/check-in */
 export function checkIn(): Promise<LiveCheckInResult> {
+  invalidateRecapCache();
   return request<LiveCheckInResult>("/api/attendance/check-in", {
     method: "POST",
     body: "{}",
@@ -151,6 +154,7 @@ export function checkIn(): Promise<LiveCheckInResult> {
 
 /** POST /api/attendance/check-out */
 export function checkOut(): Promise<LiveCheckInResult> {
+  invalidateRecapCache();
   return request<LiveCheckInResult>("/api/attendance/check-out", {
     method: "POST",
     body: "{}",
@@ -180,6 +184,7 @@ export function listLeaves(): Promise<LiveLeaveList> {
 
 /** POST /api/leave-permissions — ajukan izin/sakit/tugas khusus (identitas dari token). */
 export function submitLeave(input: LeaveInput): Promise<LiveLeaveResult> {
+  invalidateRecapCache();
   return request<LiveLeaveResult>("/api/leave-permissions", {
     method: "POST",
     body: JSON.stringify(input),
@@ -210,9 +215,31 @@ export function getEmergencyContact(): Promise<LiveEmergencyContact> {
 /* Rekap bulanan (US5) — untuk payroll M14.                            */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Cache singkat rekap per bulan. Rekap Harian dan Rekap Bulanan memakai data
+ * yang sama; tanpa cache, pindah halaman memicu fetch + parse ulang ±87 KB.
+ */
+const recapCache = new Map<string, { at: number; value: Promise<unknown> }>();
+const RECAP_TTL_MS = 15_000;
+
+function cachedRecap<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const hit = recapCache.get(key);
+  if (hit && Date.now() - hit.at < RECAP_TTL_MS) return hit.value as Promise<T>;
+  const value = load();
+  recapCache.set(key, { at: Date.now(), value });
+  value.catch(() => recapCache.delete(key)); // kegagalan jangan di-cache
+  return value;
+}
+
+/** Buang cache rekap (dipanggil setelah presensi/izin berubah). */
+function invalidateRecapCache() {
+  recapCache.clear();
+}
+
 export function getRecap(bulan: number, tahun: number): Promise<LiveRecap> {
-  return request<LiveRecap>(
-    `/api/attendance/recap?month=${tahun}-${String(bulan).padStart(2, "0")}`,
+  const month = `${tahun}-${String(bulan).padStart(2, "0")}`;
+  return cachedRecap(`recap:${month}`, () =>
+    request<LiveRecap>(`/api/attendance/recap?month=${month}`),
   );
 }
 
@@ -232,7 +259,24 @@ export function getAttendanceMonth(month: string): Promise<M13AttendanceMonth> {
 
 /** GET /api/attendance/recap/daily?month=YYYY-MM (HANYA HR) — detail per hari. */
 export function getDailyRecap(month: string): Promise<M13DailyRecap> {
-  return request<M13DailyRecap>(`/api/attendance/recap/daily?month=${month}`);
+  return cachedRecap(`daily:${month}`, async () => {
+    const result = await request<M13DailyRecap>(`/api/attendance/recap/daily?month=${month}`);
+    // Alpa hanya sah untuk hari kerja yang sudah lewat. BE versi lama masih
+    // menandai hari ini, tanggal mendatang, dan akhir pekan sebagai alpa.
+    const hariIni = wibNow().dateKey;
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        items: (result.data?.items ?? []).map((row) => {
+          const akhirPekan = [0, 6].includes(new Date(`${row.tanggal}T00:00:00Z`).getUTCDay());
+          return row.status === "alpa" && (akhirPekan || row.tanggal >= hariIni)
+            ? { ...row, status: null }
+            : row;
+        }),
+      },
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ */

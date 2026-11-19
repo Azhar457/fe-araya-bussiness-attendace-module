@@ -20,8 +20,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin_hr: [
     { href: "/kehadiran/pengaturan", label: "Pengaturan jam kerja", icon: Settings2 },
     { href: "/kehadiran/izin/rekapitulasi", label: "Rekapitulasi Perizinan", icon: FileText },
-    { href: "/kehadiran/rekap", label: "Rekap kehadiran", icon: CalendarDays },
-    { href: "/kehadiran/rekap/daily", label: "Rekap harian", icon: History },
+    { href: "/kehadiran/rekap", label: "Rekap Harian", icon: CalendarDays },
+    { href: "/kehadiran/rekap/daily", label: "Rekap Bulanan", icon: History },
   ],
   karyawan: [
     { href: "/kehadiran/hari-ini", label: "Presensi Karyawan", icon: Clock },

@@ -14,7 +14,6 @@ import type { LiveRecap, M13AttendanceMonth, M13DailyRecap } from "@/lib/types";
 
 type DailyRow = M13AttendanceMonth["items"][number];
 type TeamRow = M13DailyRecap["data"]["items"][number];
-type DailyViewRow = { date: string; row?: DailyRow; alpa?: boolean };
 
 const KATEGORI_LABEL: Record<string, string> = {
   hadir: "Hadir",
@@ -24,66 +23,8 @@ const KATEGORI_LABEL: Record<string, string> = {
   alpa: "Alpa",
 };
 
-const STATUS_HARIAN: Record<string, { label: string; tone: "success" | "pending" | "info" | "danger" | "neutral" }> = {
-  hadir: { label: "Hadir", tone: "success" },
-  terlambat: { label: "Terlambat", tone: "pending" },
-  izin: { label: "Izin", tone: "info" },
-  sakit: { label: "Sakit", tone: "info" },
-  cuti: { label: "Cuti", tone: "info" },
-  alpa: { label: "Alpa", tone: "danger" },
-};
-
-const DAILY_COLUMNS: Column<DailyViewRow>[] = [
-  {
-    key: "tanggal",
-    header: "Tanggal",
-    render: (row) => <span className="text-body text-text tabular-nums">{formatDate(row.date)}</span>,
-  },
-  {
-    key: "status",
-    header: "Status",
-    render: (row) => {
-      const data = row.row;
-      const status = data?.status ? STATUS_HARIAN[data.status] : undefined;
-      if (status && data) {
-        const label =
-          data.status === "terlambat" && data.lateMinutes > 0
-            ? `${status.label} +${data.lateMinutes} mnt`
-            : status.label;
-        return <Badge tone={status.tone}>{label}</Badge>;
-      }
-      // Hari tanpa data: alpa bila hari kerja yang sudah lewat, akhir pekan, atau
-      // belum ada presensi (hari ini/tanggal mendatang).
-      const hari = new Date(`${row.date}T00:00:00Z`).getUTCDay();
-      const libur = hari === 0 || hari === 6;
-      if (!libur && row.alpa) return <Badge tone="danger">Alpa</Badge>;
-      return <Badge tone="neutral">{libur ? "Akhir pekan" : "Tidak ada presensi"}</Badge>;
-    },
-  },
-  {
-    key: "masuk",
-    header: "Jam Masuk",
-    render: (row) => <span className="text-body text-text tabular-nums">{row.row?.checkInAt ? formatTime(row.row.checkInAt) : "—"}</span>,
-  },
-  {
-    key: "keluar",
-    header: "Jam Keluar",
-    render: (row) => <span className="text-body text-text tabular-nums">{row.row?.checkOutAt ? formatTime(row.row.checkOutAt) : "—"}</span>,
-  },
-];
-
-/** Rincian kehadiran hari ini (HR): nama, jam masuk, status, jam keluar. */
-const TEAM_COLUMNS: Column<TeamRow>[] = [
-  {
-    key: "nama",
-    header: "Karyawan",
-    render: (row) => (
-      <div className="flex flex-col leading-tight">
-        <span className="text-body text-text">{row.nama}</span>
-        {row.nik ? <span className="text-caption text-muted">{row.nik}</span> : null}
-      </div>
-    ),
-  },
+/** Rincian presensi hari ini (Karyawan): hanya baris milik sendiri. */
+const MINE_COLUMNS: Column<DailyRow>[] = [
   {
     key: "masuk",
     header: "Jam Masuk",
@@ -106,7 +47,6 @@ const TEAM_COLUMNS: Column<TeamRow>[] = [
       if (row.checkOutAt) {
         return <span className="text-body text-text tabular-nums">{formatTime(row.checkOutAt)}</span>;
       }
-      // Sudah masuk tapi belum check-out: shift belum selesai.
       if (row.status === "hadir" || row.status === "terlambat") {
         return <span className="text-caption text-muted">Belum Waktu Pulang</span>;
       }
@@ -115,13 +55,65 @@ const TEAM_COLUMNS: Column<TeamRow>[] = [
   },
 ];
 
+/** Rincian kehadiran hari ini (HR): nama, jam masuk, status, jam keluar. */
+function buildTeamColumns(hariIni: string): Column<TeamRow>[] {
+  return [
+    {
+      key: "nama",
+      header: "Karyawan",
+      render: (row) => (
+        <div className="flex flex-col leading-tight">
+          <span className="text-body text-text">{row.nama}</span>
+          {row.nik ? <span className="text-caption text-muted">{row.nik}</span> : null}
+        </div>
+      ),
+    },
+    {
+      key: "masuk",
+      header: "Jam Masuk",
+      render: (row) => (
+        <span className="text-body text-text tabular-nums">
+          {row.checkInAt ? formatTime(row.checkInAt) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => {
+        if (row.status) return <StatusBadge status={row.status} />;
+        // Hari ini belum bisa dinilai alpa → tulis apa adanya.
+        return row.tanggal === hariIni ? (
+          <Badge tone="neutral">Belum presensi</Badge>
+        ) : (
+          <span className="text-body text-muted">—</span>
+        );
+      },
+    },
+    {
+      key: "keluar",
+      header: "Jam Keluar",
+      render: (row) => {
+        if (row.checkOutAt) {
+          return <span className="text-body text-text tabular-nums">{formatTime(row.checkOutAt)}</span>;
+        }
+        // Sudah masuk tapi belum check-out: shift belum selesai.
+        if (row.status === "hadir" || row.status === "terlambat") {
+          return <span className="text-caption text-muted">Belum Waktu Pulang</span>;
+        }
+        return <span className="text-body text-muted">—</span>;
+      },
+    },
+  ];
+}
+
 /**
- * M13-US5 — rekap bulanan (ringkasan 5 kategori).
- * HR: ringkasan tim + rincian presensi hari ini (nama, masuk, status, keluar).
- * Karyawan: ringkasan sendiri + daftar presensi per tanggal.
- * Pilihan bulan ada di halaman Detail rekap per hari.
+ * M13-US5 — ringkasan rekap bulan berjalan + rincian presensi HARI INI.
+ * HR: ringkasan tim + rincian seluruh karyawan hari ini.
+ * Karyawan: ringkasan sendiri + rincian presensi sendiri hari ini.
+ * Pilihan bulan & rekap per tanggal ada di halaman Rekap Bulanan.
  */
-export function MonthlySummaryPage({
+export function DailySummaryPage({
   scope,
 }: {
   scope: "team" | "mine";
@@ -166,33 +158,40 @@ export function MonthlySummaryPage({
 
   const ringkasan = recap?.ringkasan;
 
-  // Grid tanggal 1 s.d. hari ini; hari tanpa data tetap tampil sebagai baris kosong.
-  const dailyGrid = useMemo<DailyViewRow[]>(() => {
-    const [tahun, bulan] = monthKey.split("-").map(Number);
-    const akhirBulan = new Date(Date.UTC(tahun, bulan, 0)).getUTCDate();
-    const sampai = monthKey === hariIni.slice(0, 7) ? Number(hariIni.slice(8, 10)) : akhirBulan;
-    const byDate = new Map(daily.map((row) => [row.date, row]));
-    const grid: DailyViewRow[] = [];
-    for (let d = 1; d <= sampai; d += 1) {
-      const date = `${monthKey}-${String(d).padStart(2, "0")}`;
-      const hari = new Date(`${date}T00:00:00Z`).getUTCDay();
-      const akhirPekan = hari === 0 || hari === 6;
-      // Sama dengan aturan BE: hari kerja yang sudah lewat tanpa data = alpa.
-      grid.push({ date, row: byDate.get(date), alpa: !akhirPekan && date < hariIni });
-    }
-    return grid;
-  }, [daily, monthKey, hariIni]);
+  const akhirPekan = useMemo(
+    () => [0, 6].includes(new Date(`${hariIni}T00:00:00Z`).getUTCDay()),
+    [hariIni],
+  );
 
-  const akhirPekan = [0, 6].includes(new Date(`${hariIni}T00:00:00Z`).getUTCDay());
-  const hariIniRows = akhirPekan
-    ? []
-    : teamItems.filter((row) => row.tanggal === hariIni);
+  // HR: baris grid tanggal hari ini. Karyawan: baris presensi sendiri hari ini.
+  const { teamHariIni, mineHariIni, belumPresensi } = useMemo(() => {
+    if (akhirPekan) return { teamHariIni: [] as TeamRow[], mineHariIni: [] as DailyRow[], belumPresensi: 0 };
+    const team = teamItems.filter((row) => row.tanggal === hariIni);
+    const mine = daily.filter((row) => row.date === hariIni);
+    // Hari ini tanpa presensi = "belum presensi", bukan alpa. Angka ini juga
+    // dikurangkan dari ringkasan BE yang masih menghitung today sebagai alpa.
+    const belum = loading
+      ? 0
+      : scope === "team"
+        ? team.filter((row) => !row.status).length
+        : mine.length > 0
+          ? 0
+          : 1;
+    return { teamHariIni: team, mineHariIni: mine, belumPresensi: belum };
+  }, [akhirPekan, teamItems, daily, hariIni, loading, scope]);
+
+  const ringkasanTampil = useMemo(() => {
+    const sumber = ringkasan ?? {};
+    return { ...sumber, alpa: Math.max(0, (sumber.alpa ?? 0) - belumPresensi) };
+  }, [ringkasan, belumPresensi]);
+
+  const teamColumns = useMemo(() => buildTeamColumns(hariIni), [hariIni]);
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        breadcrumb={[{ label: "Kehadiran" }, { label: "Rekap kehadiran" }]}
-        title="Rekap Kehadiran"
+        breadcrumb={[{ label: "Kehadiran" }, { label: scope === "team" ? "Rekap Harian" : "Rekap Saya" }]}
+        title={scope === "team" ? "Rekap Harian" : "Rekap Saya"}
       />
 
       {error ? <Banner variant="danger" message={error} /> : null}
@@ -200,9 +199,12 @@ export function MonthlySummaryPage({
       {/* Ringkasan total bulan berjalan. */}
       <Card className="p-5 sm:p-6">
         <h2 className="text-h3 text-text">Ringkasan total</h2>
-        <p className="mt-1 text-caption text-muted">{formatMonthLabel(monthKey)}</p>
+        <p className="mt-1 text-caption text-muted">
+          {scope === "team" ? "Seluruh karyawan · " : ""}
+          {formatMonthLabel(monthKey)}
+        </p>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {Object.entries(ringkasan ?? {}).map(
+          {Object.entries(ringkasanTampil).map(
             ([key, value]) => (
               <div key={key} className="rounded-lg bg-surface-2 p-3">
                 <p className="text-caption text-muted">{KATEGORI_LABEL[key] ?? key}</p>
@@ -215,9 +217,9 @@ export function MonthlySummaryPage({
 
       {scope === "team" ? (
         <Table
-          caption={`Rincian kehadiran ${formatDate(hariIni)}`}
-          columns={TEAM_COLUMNS}
-          rows={hariIniRows}
+          caption={`Rincian kehadiran hari ini · ${formatDate(hariIni)}`}
+          columns={teamColumns}
+          rows={teamHariIni}
           rowKey={(row) => `${row.tanggal}-${row.karyawanId}`}
           loading={loading}
           empty={
@@ -230,23 +232,25 @@ export function MonthlySummaryPage({
         />
       ) : (
         <Table
-          caption={`Presensi harian ${formatMonthLabel(monthKey)}`}
-          columns={DAILY_COLUMNS}
-          rows={dailyGrid}
-          rowKey={(row) => row.date}
+          caption={`Presensi saya hari ini · ${formatDate(hariIni)}`}
+          columns={MINE_COLUMNS}
+          rows={mineHariIni}
+          rowKey={(row) => String(row.id)}
           loading={loading}
           empty={
             <p className="text-body text-muted">
-              Belum ada presensi tercatat pada bulan ini.
+              {akhirPekan
+                ? "Hari ini akhir pekan — tidak ada presensi."
+                : "Belum ada presensi tercatat hari ini."}
             </p>
           }
         />
       )}
 
       <p className="text-caption text-muted">
-        Rekap berisi 5 kategori sesuai dokumen studi kasus: hadir, terlambat, izin/sakit,
-        cuti, alpa. Kolom <strong>cuti</strong> baru terisi setelah data cuti dari modul
-        kepegawaian tersedia.
+        Ringkasan berisi 5 kategori sesuai dokumen studi kasus: hadir, terlambat, izin/sakit,
+        cuti, alpa. Untuk melihat kehadiran per tanggal, buka halaman{" "}
+        <strong>Rekap Bulanan</strong>.
       </p>
     </div>
   );

@@ -1,9 +1,11 @@
 "use client";
 
+import { memo, useMemo } from "react";
+
 import { Card } from "@/components/ui/Card";
 import { formatMonthLabel, wibNow } from "@/lib/format";
 
-export type MapDayTone = "success" | "pending" | "info" | "danger";
+export type MapDayTone = "success" | "pending" | "info" | "danger" | "neutral";
 
 /** Isi satu sel kalender: tone warna + label singkat (jam masuk / status). */
 export type MapDay = { tone?: MapDayTone; label: string };
@@ -13,6 +15,7 @@ const TONE_CELL: Record<MapDayTone, string> = {
   pending: "bg-pending-bg text-pending-fg",
   info: "bg-info-bg text-info-fg",
   danger: "bg-danger-bg text-danger-fg",
+  neutral: "bg-surface-2 text-muted",
 };
 
 const TONE_DOT: Record<MapDayTone, string> = {
@@ -20,6 +23,7 @@ const TONE_DOT: Record<MapDayTone, string> = {
   pending: "bg-pending-solid",
   info: "bg-info-solid",
   danger: "bg-danger-solid",
+  neutral: "bg-neutral-solid",
 };
 
 const HARI = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
@@ -36,7 +40,7 @@ const LEGEND: { tone: MapDayTone; label: string }[] = [
  * sebagai sel kosong; Sabtu/Minggu ditandai "Libur". Bila `onSelect` diberikan,
  * tiap tanggal bisa diklik (dipakai halaman detail per hari).
  */
-export function AttendanceMap({
+export function AttendanceMapBase({
   month,
   days,
   selected,
@@ -165,3 +169,6 @@ export function AttendanceMap({
     </Card>
   );
 }
+
+/** Stabil antar-render: peta hanya berubah saat bulan/pilihan/hitungan berubah. */
+export const AttendanceMap = memo(AttendanceMapBase);

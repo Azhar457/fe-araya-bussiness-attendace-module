@@ -46,7 +46,7 @@ export function AttendanceDetailPage({ employeeName }: { employeeName: string })
     setSelected(null);
     try {
       const result = await getAttendanceMonth(m);
-      setItems([...(result.items ?? [])].sort((a, b) => b.date.localeCompare(a.date)));
+      setItems((result.items ?? []).toSorted((a, b) => b.date.localeCompare(a.date)));
     } catch (caught) {
       setItems([]);
       setError(caught instanceof ApiError ? caught.message : "Gagal memuat data kehadiran.");

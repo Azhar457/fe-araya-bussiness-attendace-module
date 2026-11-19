@@ -1,8 +1,23 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
 
 import "@/styles/tokens.css";
 import "./globals.css";
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+  variable: "--font-head",
+  display: "swap",
+});
+
+const sourceSans3 = Source_Sans_3({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Kehadiran · Araya Business Hub",
@@ -11,15 +26,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="id">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
-        />
-      </head>
+    <html lang="id" className={`${plusJakartaSans.variable} ${sourceSans3.variable}`}>
       <body>
         <a href="#konten" className="skip-link">
           Lewati ke konten

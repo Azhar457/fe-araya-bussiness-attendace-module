@@ -1,11 +1,11 @@
-import { MonthlySummaryPage } from "@/components/kehadiran/MonthlySummaryPage";
+import { DailySummaryPage } from "@/components/kehadiran/DailySummaryPage";
 import { requireSession } from "@/lib/auth/session";
 
 /** M13-US5 — HR melihat seluruh tim; Karyawan hanya melihat rekapnya sendiri. */
 export default async function RekapPage() {
   const session = await requireSession();
   return (
-    <MonthlySummaryPage
+    <DailySummaryPage
       scope={session.role === "admin_hr" ? "team" : "mine"}
       employeeId={session.employeeId}
     />

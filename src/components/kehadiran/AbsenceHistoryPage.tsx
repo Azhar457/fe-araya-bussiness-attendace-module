@@ -73,7 +73,7 @@ export function AbsenceHistoryPage() {
     }
     return [...byId.entries()]
       .map(([key, group]) => {
-        const sorted = [...group].sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+        const sorted = group.toSorted((a, b) => a.tanggal.localeCompare(b.tanggal));
         const withAttachment = sorted.find((row) => row.attachment);
         return {
           key,

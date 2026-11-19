@@ -132,18 +132,22 @@ export function minutesToTime(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+// Formatter dibuat sekali: wibNow() dipanggil per baris tabel, dan membuat
+// Intl.DateTimeFormat baru tiap panggilan itu mahal.
+const WIB_PARTS = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
 /** Waktu sekarang menurut WIB. Acuan server (jawaban pertanyaan terbuka #1 PRD). */
 export function wibNow(): { dateKey: string; minutes: number; iso: string } {
   const now = new Date();
-  const p = new Intl.DateTimeFormat("en-GB", {
-    timeZone: TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(now);
+  const p = WIB_PARTS.formatToParts(now);
   const get = (t: Intl.DateTimeFormatPartTypes) => p.find((x) => x.type === t)?.value ?? "";
   return {
     dateKey: `${get("year")}-${get("month")}-${get("day")}`,

@@ -10,8 +10,8 @@ export default async function IzinPage() {
   const session = await getSession();
   if (session?.role === "admin_hr") {
     // HR tidak membuat pengajuan izin — arahkan ke rekapitulasi.
-    const { RekapPerizinan } = await import("@/components/kehadiran/RekapPerizinan");
-    return <RekapPerizinan />;
+    const { LeaveRecapPage } = await import("@/components/kehadiran/LeaveRecapPage");
+    return <LeaveRecapPage />;
   }
   return <AbsenceFormPage />;
 }

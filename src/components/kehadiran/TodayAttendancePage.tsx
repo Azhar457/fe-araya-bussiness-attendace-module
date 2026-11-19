@@ -19,7 +19,7 @@ import type { LiveRecap, LiveToday, LiveWorkingHours } from "@/lib/types";
  * Seluruh data dari BE LIVE: getToday (jam presensi/status/keterlambatan) +
  * getRecap (rekapitulasi bulan berjalan, baris milik karyawan sendiri).
  */
-export function HariIniLive({ employeeName, employeeId }: { employeeName: string; employeeId: string }) {
+export function TodayAttendancePage({ employeeName, employeeId }: { employeeName: string; employeeId: string }) {
   const [today, setToday] = useState<LiveToday | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,35 +33,41 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      setToday(await getToday());
-    } catch (caught) {
+    const [tahun, bulan] = currentMonth().split("-").map(Number);
+    const [todayRes, workingHoursRes, recapRes] = await Promise.allSettled([
+      getToday(),
+      getWorkingHours(),
+      getRecap(bulan, tahun),
+    ]);
+
+    if (todayRes.status === "fulfilled") {
+      setToday(todayRes.value);
+    } else {
+      const caught = todayRes.reason;
       setError(caught instanceof ApiError ? caught.message : "Gagal memuat data kehadiran.");
-    } finally {
-      setLoading(false);
     }
+
+    if (workingHoursRes.status === "fulfilled") {
+      setWorkingHours(workingHoursRes.value);
+    } else {
+      setWorkingHours(null);
+    }
+
+    if (recapRes.status === "fulfilled") {
+      setRecap(recapRes.value);
+    } else {
+      setRecap(null);
+    }
+
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // Muat jam kerja (untuk check-out only-at-jam-pulang).
-  useEffect(() => {
-    getWorkingHours().then(setWorkingHours).catch(() => setWorkingHours(null));
-  }, []);
-
-  // Muat ulang kartu saat CTA presensi mengubah status hari ini.
+  // Muat ulang saat CTA presensi mengubah status hari ini.
   useEffect(() => onAttendanceChanged(() => void load()), [load]);
-
-  // Rekapitulasi bulan berjalan (dipanggil terpisah: getRecap butuh bulan+tahun).
-  useEffect(() => {
-    const [tahun, bulan] = currentMonth().split("-").map(Number);
-    getRecap(bulan, tahun)
-      .then(setRecap)
-      .catch(() => setRecap(null));
-  }, []);
-
   // Baris rekap milik karyawan sendiri (karyawan_id numerik = cookie sesi).
   const recapRow = useMemo(() => {
     if (!recap?.data.rekap) return null;
@@ -159,7 +165,7 @@ export function HariIniLive({ employeeName, employeeId }: { employeeName: string
     buttonVariant = "neutral";
     buttonDisabled = true;
   } else if (isCheckedIn) {
-    buttonLabel = isAfterWorkEnd ? "Jam Pulang Lelewati" : "Presensi Keluar";
+    buttonLabel = isAfterWorkEnd ? "Jam Pulang Terlewati" : "Presensi Keluar";
     buttonVariant = isAfterWorkEnd ? "neutral" : "danger";
     buttonDisabled = isAfterWorkEnd;
   }
