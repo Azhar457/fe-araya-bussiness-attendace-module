@@ -84,7 +84,7 @@ export function TodayAttendancePage({ employeeName, employeeId }: { employeeName
       notifyAttendanceChanged();
       push({
         variant: "success",
-        title: "Presensi berhasil",
+        title: isCheckOut ? "Check Out berhasil" : "Check In berhasil",
         description: isCheckOut ? "Check-out hari ini tercatat." : "Check-in hari ini tercatat.",
       });
       await load();
@@ -157,7 +157,7 @@ export function TodayAttendancePage({ employeeName, employeeId }: { employeeName
   }
 
   // Tombol presensi: transisi state.
-  let buttonLabel = "Presensi Masuk Sekarang";
+  let buttonLabel = "Check In Sekarang";
   let buttonVariant: "primary" | "danger" | "neutral" = "primary";
   let buttonDisabled = false;
   if (isCheckedOut) {
@@ -165,9 +165,15 @@ export function TodayAttendancePage({ employeeName, employeeId }: { employeeName
     buttonVariant = "neutral";
     buttonDisabled = true;
   } else if (isCheckedIn) {
-    buttonLabel = isAfterWorkEnd ? "Jam Pulang Terlewati" : "Presensi Keluar";
-    buttonVariant = isAfterWorkEnd ? "neutral" : "danger";
-    buttonDisabled = isAfterWorkEnd;
+    // Check-out hanya dibuka saat jam pulang tiba; sebelum itu tombol mati.
+    const jamPulang = workingHours?.workEnd.slice(0, 5) ?? "";
+    buttonLabel = isAfterWorkEnd
+      ? "Check Out"
+      : jamPulang
+        ? `Check Out (mulai ${jamPulang})`
+        : "Belum Waktu Check Out";
+    buttonVariant = isAfterWorkEnd ? "danger" : "neutral";
+    buttonDisabled = !isAfterWorkEnd;
   }
   if (!today.isWorkday) {
     buttonLabel = "Hari Ini Bukan Hari Kerja";
