@@ -19,8 +19,6 @@ import type { LiveLeaveList, M13AttendanceItem } from "@/lib/types";
 
 const BULAN_LIST = lastMonths();
 
-/** Status presensi yang berasal dari pengajuan izin/sakit. */
-const LEAVE_STATUSES = new Set(["izin", "sakit"]);
 const JENIS_LABEL: Record<string, string> = {
   izin: "Izin",
   sakit: "Sakit",
@@ -75,9 +73,10 @@ export function AttendanceDetailPage({ employeeName }: { employeeName: string })
     void load(month);
   }, [month, load]);
 
-  // Pengajuan izin hanya dimuat saat baris yang dibuka memang berasal dari izin.
+  // Detail pengajuan dimuat untuk baris mana pun; blok hanya tampil bila tanggal
+  // ini memang punya pengajuan (izin ditolak jadi alpa, tapi tetap punya pengajuan).
   useEffect(() => {
-    if (!selected || !LEAVE_STATUSES.has(selected.status ?? "")) {
+    if (!selected) {
       setLeaves([]);
       setConfirmDelete(false);
       return;
@@ -285,7 +284,7 @@ export function AttendanceDetailPage({ employeeName }: { employeeName: string })
             </div>
           </dl>
 
-          {LEAVE_STATUSES.has(selected.status ?? "") ? (
+          {leaveRows.length > 0 ? (
             <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
               <p className="text-caption font-semibold uppercase tracking-wide text-muted">
                 Detail Perizinan

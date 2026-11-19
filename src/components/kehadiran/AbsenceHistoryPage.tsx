@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
-import { Briefcase, CalendarDays, Download, FileText, Inbox, Paperclip, Stethoscope } from "lucide-react";
+import { Briefcase, CalendarDays, Download, FileText, Inbox, Paperclip, Stethoscope, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Dialog } from "@/components/ui/Dialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, type Column } from "@/components/ui/Table";
+import { useToast } from "@/components/ui/Toast";
 import { ApiError, downloadFile } from "@/lib/api/client";
-import { listLeaves } from "@/lib/api/kehadiran";
-import { formatDate } from "@/lib/format";
+import { deleteLeave, listLeaves } from "@/lib/api/kehadiran";
+import { formatDate, wibNow } from "@/lib/format";
 import type { LiveLeaveList } from "@/lib/types";
 
 type LeaveRow = LiveLeaveList["data"][number];
@@ -45,6 +48,9 @@ export function AbsenceHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [selected, setSelected] = useState<Pengajuan | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Pengajuan | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const { push: toast } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +64,41 @@ export function AbsenceHistoryPage() {
       setLoading(false);
     }
   }, []);
+
+  // Hanya pengajuan yang masih menunggu dan belum lewat yang boleh dibatalkan.
+  const canCancel = (p: Pengajuan) =>
+    (!p.status || p.status === "pending") && p.mulai >= wibNow().dateKey;
+
+  const hapusPengajuan = useCallback(async (p: Pengajuan) => {
+    const ids = rows
+      .filter((row) => String(row.pengajuan_id ?? row.id ?? "") === p.key)
+      .map((row) => row.id)
+      .filter((id): id is number => typeof id === "number");
+
+    if (ids.length === 0) {
+      toast({ variant: "danger", title: "Pengajuan tidak ditemukan, tidak ada yang dibatalkan." });
+      setConfirmDelete(null);
+      return;
+    }
+
+    setDeleting(true);
+    const hasil = await Promise.allSettled(ids.map((id) => deleteLeave(id)));
+    setDeleting(false);
+    setConfirmDelete(null);
+
+    const gagal = hasil.filter((h) => h.status === "rejected").length;
+    if (gagal > 0) {
+      toast({
+        variant: "pending",
+        title: `Pengajuan dibatalkan sebagian (${hasil.length - gagal} dari ${hasil.length}).`,
+        description: "Muat ulang halaman untuk memeriksa sisanya.",
+      });
+    } else {
+      toast({ variant: "success", title: "Pengajuan dibatalkan." });
+    }
+
+    await load();
+  }, [rows, load, toast]);
 
   useEffect(() => {
     void load();
@@ -171,14 +212,26 @@ export function AbsenceHistoryPage() {
       header: "Detail",
       align: "right",
       render: (row) => (
-        <button
-          type="button"
-          onClick={() => setSelected(row)}
-          className="inline-flex items-center gap-1 text-label text-primary hover:text-primary-hover"
-        >
-          <FileText aria-hidden size={14} />
-          Lihat
-        </button>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setSelected(row)}
+            className="inline-flex items-center gap-1 text-label text-primary hover:text-primary-hover"
+          >
+            <FileText aria-hidden size={14} />
+            Lihat
+          </button>
+          {canCancel(row) ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(row)}
+              className="inline-flex items-center gap-1 text-label text-danger-fg hover:text-danger-action"
+            >
+              <Trash2 aria-hidden size={14} />
+              Batalkan
+            </button>
+          ) : null}
+        </div>
       ),
     },
   ];
@@ -196,6 +249,8 @@ export function AbsenceHistoryPage() {
           onClose={() => setSelected(null)}
           onUnduh={(p) => void unduhLampiran(p)}
           downloading={downloading}
+          canCancel={canCancel(selected)}
+          onBatalkan={(p) => setConfirmDelete(p)}
         />
       ) : null}
 
@@ -235,6 +290,20 @@ export function AbsenceHistoryPage() {
           rowKey={(row) => row.key}
         />
       )}
+
+      <Dialog
+        open={confirmDelete !== null}
+        title="Batalkan pengajuan?"
+        description={
+          confirmDelete
+            ? `Pengajuan ${JENIS_LABEL[confirmDelete.jenis] ?? confirmDelete.jenis} beserta seluruh tanggalnya akan dihapus dan tidak dapat dikembalikan.`
+            : undefined
+        }
+        confirmLabel="Ya, Batalkan"
+        loading={deleting}
+        onConfirm={() => void hapusPengajuan(confirmDelete as Pengajuan)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }
@@ -255,11 +324,15 @@ function PengajuanDetailCard({
   onClose,
   onUnduh,
   downloading,
+  canCancel,
+  onBatalkan,
 }: {
   detail: Pengajuan;
   onClose: () => void;
   onUnduh: (p: Pengajuan) => void;
   downloading: string | null;
+  canCancel: boolean;
+  onBatalkan: (p: Pengajuan) => void;
 }) {
   return (
     <Card className="p-5">
@@ -323,6 +396,18 @@ function PengajuanDetailCard({
           </dd>
         </div>
       </dl>
+
+      {canCancel ? (
+        <div className="mt-4 flex flex-wrap gap-3 border-t border-line pt-4">
+          <Button variant="danger" size="sm" leftIcon={<Trash2 aria-hidden size={14} />} onClick={() => onBatalkan(detail)}>
+            Batalkan Pengajuan
+          </Button>
+        </div>
+      ) : detail.status === "pending" ? (
+        <p className="mt-4 text-caption text-muted">
+          Pengajuan sudah lewat dan tidak dapat dibatalkan.
+        </p>
+      ) : null}
     </Card>
   );
 }

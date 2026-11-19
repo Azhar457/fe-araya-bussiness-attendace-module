@@ -40,7 +40,7 @@ FE memakai route handler sendiri (`/api/m12/*`) sebagai proxy same-origin.
 | M13-US1 atur jam kerja & toleransi | `/kehadiran/pengaturan` | Admin HR | ✅ `POST /api/working-hours` |
 | M13-US2 check-in / check-out + terlambat | `/kehadiran/hari-ini` | Karyawan | ✅ `GET /api/attendance/today`, `POST .../check-in`, `POST .../check-out` |
 | M13-US3 ajukan izin / sakit | `/kehadiran/izin` | Karyawan | ✅ `GET`/`POST /api/leave-permissions` |
-| M13-US3 riwayat pengajuan | `/kehadiran/izin/riwayat` | Karyawan | ✅ daftar milik sendiri |
+| M13-US3 riwayat pengajuan | `/kehadiran/izin/riwayat` | Karyawan | ✅ daftar milik sendiri + tombol Batalkan (hanya pending & belum lewat) |
 | M13-US4 cuti disetujui → status cuti | kolom **cuti** di rekap | Sistem | ⛔ menunggu kontrak cuti M12 (lihat §4) |
 | M13-US5 rekap bulanan per karyawan | `/kehadiran/rekap` | Admin HR (semua) / Karyawan (milik sendiri) | ✅ `GET /api/attendance/recap?bulan=&tahun=` + tombol kirim ke M14 |
 
