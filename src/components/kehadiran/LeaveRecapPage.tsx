@@ -342,7 +342,7 @@ export function LeaveRecapPage() {
       </div>
 
       {loading ? (
-        <Card className="flex flex-col items-center gap-3 p-10">
+        <Card className="flex flex-col items-center gap-3 p-7">
           <Inbox aria-hidden size={32} className="text-muted" />
           <p className="text-body text-muted">Memuat rekapitulasi perizinan…</p>
         </Card>
@@ -365,8 +365,8 @@ export function LeaveRecapPage() {
           </Button>
         </Card>
       ) : pending.length === 0 ? (
-        <Card className="flex flex-col items-center gap-4 p-10 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-surface-2 text-muted">
+        <Card className="flex flex-col items-center gap-4 p-7 text-center">
+          <div className="flex size-7 items-center justify-center rounded-full bg-surface-2 text-muted">
             <CheckCircle2 aria-hidden size={24} />
           </div>
           <div className="flex flex-col gap-1">

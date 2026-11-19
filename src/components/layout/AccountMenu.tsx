@@ -61,7 +61,7 @@ export function AccountMenu({ userName, role }: { userName: string; role: Role }
         <div
           role="menu"
           aria-label="Akun"
-          className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-lg border border-line bg-surface p-2 shadow"
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[224px] rounded-lg border border-line bg-surface p-2 shadow"
         >
           <div className="px-2 py-2">
             <p className="text-label text-text">{userName}</p>

@@ -192,7 +192,7 @@ export function MonthlyRecapPage() {
             id="daily-month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="w-full sm:w-48"
+            className="w-full sm:w-[192px]"
           >
             {BULAN_LIST.map((m) => (
               <option key={m} value={m}>
@@ -204,10 +204,10 @@ export function MonthlyRecapPage() {
       </div>
 
       {loading ? (
-        <Card className="flex flex-col items-center gap-3 p-10">
+        <Card className="flex flex-col items-center gap-3 p-7">
           <Inbox aria-hidden size={32} className="text-muted" />
           <p className="text-body text-muted">Memuat data detail per hari…</p>
-          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-[160px]" />
         </Card>
       ) : error ? (
         <Card className="flex flex-col gap-3 p-5">
@@ -221,8 +221,8 @@ export function MonthlyRecapPage() {
           </button>
         </Card>
       ) : groups.length === 0 ? (
-        <Card className="flex flex-col items-center gap-4 p-10 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-surface-2 text-muted">
+        <Card className="flex flex-col items-center gap-4 p-7 text-center">
+          <div className="flex size-7 items-center justify-center rounded-full bg-surface-2 text-muted">
             <CalendarDays aria-hidden size={24} />
           </div>
           <p className="text-body text-muted">Belum ada data kehadiran di {formatMonthLabel(month)}.</p>

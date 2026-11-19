@@ -107,12 +107,12 @@ export function TodayAttendancePage({ employeeName, employeeId }: { employeeName
     return (
       <div className="flex flex-col gap-5">
         <Card className="flex flex-col gap-3 p-5">
-          <Skeleton className="h-6 w-56" />
-          <Skeleton className="h-10 w-40" />
+          <Skeleton className="h-6 w-[224px]" />
+          <Skeleton className="h-control w-[160px]" />
         </Card>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-          <Skeleton className="h-64 rounded-lg lg:col-span-7" />
-          <Skeleton className="h-64 rounded-lg lg:col-span-5" />
+          <Skeleton className="h-[256px] rounded-lg lg:col-span-7" />
+          <Skeleton className="h-[256px] rounded-lg lg:col-span-5" />
         </div>
       </div>
     );
@@ -208,7 +208,7 @@ export function TodayAttendancePage({ employeeName, employeeId }: { employeeName
             <span className="text-display font-head tabular-nums text-primary">{clock}</span>
             <span className="text-body text-muted">{formatDateLong(today.date)}</span>
           </div>
-          <div className="flex size-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
+          <div className="flex size-control items-center justify-center rounded-lg bg-primary-soft text-primary">
             <Clock aria-hidden size={22} />
           </div>
         </div>

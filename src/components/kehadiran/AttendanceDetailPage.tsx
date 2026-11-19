@@ -135,7 +135,7 @@ export function AttendanceDetailPage({ employeeName }: { employeeName: string })
             id="attendance-month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="w-full sm:w-48"
+            className="w-full sm:w-[192px]"
           >
             {BULAN_LIST.map((m) => (
               <option key={m} value={m}>
@@ -199,10 +199,10 @@ export function AttendanceDetailPage({ employeeName }: { employeeName: string })
       ) : null}
 
       {loading ? (
-        <Card className="flex flex-col items-center gap-3 p-10">
+        <Card className="flex flex-col items-center gap-3 p-7">
           <Inbox aria-hidden size={32} className="text-muted" />
           <p className="text-body text-muted">Memuat data kehadiran…</p>
-          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-[160px]" />
         </Card>
       ) : error ? (
         <Card className="flex flex-col gap-3 p-5">

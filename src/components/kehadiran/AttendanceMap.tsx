@@ -120,7 +120,7 @@ export function AttendanceMapBase({
               kelas = TONE_CELL[data.tone];
               isi = (
                 <span className="flex items-center gap-1 text-caption font-medium">
-                  <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${TONE_DOT[data.tone]}`} />
+                  <span aria-hidden className={`size-1 shrink-0 rounded-full ${TONE_DOT[data.tone]}`} />
                   <span className="truncate">{data.label}</span>
                 </span>
               );
@@ -136,7 +136,7 @@ export function AttendanceMapBase({
               : iniHari
                 ? "ring-1 ring-primary/40"
                 : "";
-            const dasar = `flex min-h-16 flex-col justify-between rounded-lg p-2 text-left ${kelas} ${sorot}`;
+            const dasar = `flex min-h-[64px] flex-col justify-between rounded-lg p-2 text-left ${kelas} ${sorot}`;
 
             const sel = (
               <>

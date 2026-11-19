@@ -226,7 +226,7 @@ export function AbsenceFormPage() {
         <Card className="flex flex-col gap-4 p-5 lg:col-span-7">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <div className="flex size-[36px] items-center justify-center rounded-lg bg-primary-soft text-primary">
                 <CalendarDays aria-hidden size={18} />
               </div>
               <div>
@@ -456,7 +456,7 @@ export function AbsenceFormPage() {
                       <div className="flex min-w-0 items-center gap-3">
                         <span
                           aria-hidden
-                          className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                          className={`flex size-6 shrink-0 items-center justify-center rounded-lg ${
                             first.jenis === "sakit" ? "bg-danger-soft text-danger-fg" : "bg-primary-soft text-primary"
                           }`}
                         >
